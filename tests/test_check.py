@@ -1,16 +1,17 @@
 import io
 import zipfile
 
+from helpers import make
 from tejtex import backend
 from tejtex.backend.check import check
-from tejtex.ir.nodes import Document, Meta, Paragraph, TextRun
+from tejtex.ir.nodes import Paragraph, TextRun
 
 W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
 R = 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
 
 
 def good():
-    return backend.render(Document(Meta(), [Paragraph("BodyText", [TextRun("x")])]))
+    return backend.render(make([Paragraph("BodyText", [TextRun("x")])]))
 
 
 def change(data, edits=None, drop=(), add=None):

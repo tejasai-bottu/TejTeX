@@ -8,6 +8,7 @@ from pathlib import Path
 import docx
 import pytest
 
+from helpers import make
 from tejtex import backend
 from tejtex.backend import writer
 from tejtex.errors import Exit, TejtexError
@@ -18,7 +19,7 @@ SRC = Path(writer.__file__).parent
 
 
 def doc(*texts, meta=None):
-    return Document(meta or Meta(), [Paragraph("BodyText", [TextRun(t)]) for t in texts])
+    return make([Paragraph("BodyText", [TextRun(t)]) for t in texts], meta)
 
 
 def texts(data):
@@ -27,10 +28,9 @@ def texts(data):
 
 def test_write(tmp_path):
     out = tmp_path / "a.docx"
-    d = doc("one", "two")
-    d.blocks.insert(0, Heading(1, [TextRun("Head")], "Heading1", "1"))
+    d = make([Heading(1, [TextRun("Head")], "Heading1", "1"), Paragraph("BodyText", [TextRun("one")])])
     backend.write(d, out)
-    assert [p.text for p in docx.Document(str(out)).paragraphs] == ["1 Head", "one", "two"]
+    assert [p.text for p in docx.Document(str(out)).paragraphs] == ["1\tHead", "one"]
 
 
 def test_output_is_byte_identical():
@@ -57,8 +57,7 @@ def test_package_is_clean():
 
 def test_meta_and_footnotes_are_not_dropped():
     meta = Meta(title=[TextRun("T")], authors=[[TextRun("A")]], date=[TextRun("2026")], abstract=[Paragraph("Abstract", [TextRun("Abs.")])])
-    d = doc("x", meta=meta)
-    d.blocks[0].inlines += [Footnote("1", [Paragraph("FootnoteText", [TextRun("Note.")])]), Image("f.png")]
+    d = make([Paragraph("BodyText", [TextRun("x"), Footnote("1", [Paragraph("FootnoteText", [TextRun("Note.")])]), Image("f.png")])], meta)
     assert texts(backend.render(d)) == ["T", "A", "2026", "Abs.", "x[1][image: f.png]", "[1] Note."]
 
 
@@ -86,13 +85,13 @@ def test_invalid_package_is_never_written(tmp_path, monkeypatch):
 
 
 def test_backend_imports_only_the_model():
-    allowed = {"tejtex.errors", "tejtex.ir.nodes", "tejtex.backend.check", "tejtex.backend.package", "tejtex.backend.writer"}
+    allowed = {"tejtex.errors", "tejtex.ir.nodes"}
     for f in SRC.glob("*.py"):
         for n in ast.walk(ast.parse(f.read_text(encoding="utf-8"))):
             if isinstance(n, ast.ImportFrom) and n.level:
                 parts = ["tejtex", "backend"][: 2 - (n.level - 1)]
                 name = ".".join(parts + ([n.module] if n.module else []))
-                assert name in allowed, f"{f.name} imports {name}"
+                assert name in allowed or name.startswith("tejtex.backend."), f"{f.name} imports {name}"
             elif isinstance(n, (ast.Import, ast.ImportFrom)) and not getattr(n, "level", 0):
                 mods = [a.name for a in n.names] if isinstance(n, ast.Import) else [n.module]
                 assert not any(m.startswith("tejtex") for m in mods), f"{f.name} imports {mods}"

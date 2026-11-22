@@ -1,0 +1,30 @@
+\documentclass{article}
+\usepackage{ulem}
+\title{Formatting Test}
+\author{Ann One \and Bob Two}
+\date{November 2026}
+\begin{document}
+\maketitle
+\begin{abstract}
+An abstract with \emph{emphasis}.
+\end{abstract}
+\section{Runs}\label{sec:runs}
+Plain \textbf{bold} \textit{italic} \emph{emph \emph{upright} again} \textbf{\emph{both}} \texttt{code()} \underline{under} \sout{struck} x\textsuperscript{2} H\textsubscript{2}O \textsc{Small Caps}.
+\textit{Italic with \emph{upright} inside}.\\
+After a line break.
+\subsection{Second level}
+Text with a \unknowncmd{thing} placeholder.
+\subsubsection{Third level}
+\paragraph{Fourth level} Run-in text.
+\section*{Unnumbered}
+\begin{quote}
+A quoted paragraph.
+\end{quote}
+\begin{itemize}
+  \item First \textbf{item}
+  \item Second item
+\end{itemize}
+\begin{tikzpicture}
+\draw (0,0) -- (1,1);
+\end{tikzpicture}
+\end{document}

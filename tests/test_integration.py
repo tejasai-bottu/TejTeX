@@ -19,8 +19,8 @@ def test_example_compiles(real_pandoc, tmp_path):
     shutil.copy(EXAMPLE, src)
     assert main(["compile", str(src)]) == Exit.OK
     t = texts(src.with_suffix(".docx"))
-    assert t[0] == "1 Introduction"
-    for s in ["1.1 Goals", "Native headings", "Second step", "2 Data", "alpha", "1"]:
+    assert t[0] == "1\tIntroduction"
+    for s in ["1.1\tGoals", "Native headings", "Second step", "2\tData", "alpha", "1"]:
         assert s in t
 
 
@@ -28,7 +28,7 @@ def test_console_compile_main_tex(real_pandoc, tejtex_exe, tmp_path):
     shutil.copy(EXAMPLE, tmp_path / "main.tex")
     r = subprocess.run([tejtex_exe, "compile", "main.tex"], cwd=tmp_path, capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
-    assert texts(tmp_path / "main.docx")[0] == "1 Introduction"
+    assert texts(tmp_path / "main.docx")[0] == "1\tIntroduction"
 
 
 def test_paths_with_spaces_and_unicode(real_pandoc, tmp_path):
@@ -39,7 +39,7 @@ def test_paths_with_spaces_and_unicode(real_pandoc, tmp_path):
     out = tmp_path / "out put" / "résumé.docx"
     out.parent.mkdir()
     assert main(["compile", str(src), "-o", str(out)]) == Exit.OK
-    assert texts(out)[0] == "1 Introduction"
+    assert texts(out)[0] == "1\tIntroduction"
 
 
 def test_relative_paths(real_pandoc, tmp_path, monkeypatch):
