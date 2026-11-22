@@ -68,7 +68,7 @@ def tex(tmp_path):
     return f
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def real_pandoc():
     try:
         ok = frontend.version("pandoc", 30) == PANDOC_VERSION

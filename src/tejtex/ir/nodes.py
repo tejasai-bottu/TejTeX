@@ -278,12 +278,16 @@ def text(items):
             out.append(x.text)
         elif isinstance(x, Hyperlink):
             out.append(text(x.inlines))
+        elif isinstance(x, Image):
+            out.append(f"[image: {x.path}]")
+        elif isinstance(x, Footnote):
+            out.append(f"[{x.number}]")
     return "".join(out)
 
 
-def lines(doc):
+def block_lines(block):
     out = []
-    stack = list(reversed(doc.blocks))
+    stack = [block]
     while stack:
         b = stack.pop()
         if isinstance(b, Heading):
@@ -318,3 +322,26 @@ def lines(doc):
         elif isinstance(b, (Quote, Container)):
             stack.extend(reversed(b.blocks))
     return out
+
+
+def meta_lines(doc):
+    m = doc.meta
+    out = [text(x) for x in [m.title] + m.authors + [m.date] if text(x).strip()]
+    for b in m.abstract:
+        out += block_lines(b)
+    return out
+
+
+def note_lines(doc):
+    out = []
+    for n in walk(doc):
+        if isinstance(n, Footnote):
+            out.append(f"[{n.number}] " + " ".join(x for b in n.blocks for x in block_lines(b)))
+    return out
+
+
+def lines(doc):
+    out = meta_lines(doc)
+    for b in doc.blocks:
+        out += block_lines(b)
+    return out + note_lines(doc)

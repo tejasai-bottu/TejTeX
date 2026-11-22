@@ -2,7 +2,7 @@
 
 TejTeX compiles LaTeX source into native, structurally editable Microsoft Word (DOCX) documents. It maps the semantic structure of the source (headings, paragraphs, lists, tables, figures, captions, references and styles) onto Word's own document structures and leaves layout and pagination to Word.
 
-**Status: Phase 3 (document model).** The frontend resolves included files, runs Pandoc safely, classifies every LaTeX construct and reports what it cannot convert. The document model numbers sections, figures, tables, equations, theorems and list items, resolves every `\ref` and citation, and assigns Word styles, list numbering, bookmarks and relationships — see [docs/ir.md](docs/ir.md). The backend still writes plain paragraphs (with numbers and resolved references); native Word structures come in Phase 4.
+**Status: Phase 4, Stage 4.1 (DOCX backend foundation).** The frontend resolves included files, runs Pandoc safely, classifies every LaTeX construct and reports what it cannot convert. The document model numbers sections, figures, tables, equations, theorems and list items, resolves every `\ref` and citation, and assigns Word styles, list numbering, bookmarks and relationships — see [docs/ir.md](docs/ir.md). The backend writes a clean, validated, byte-for-byte reproducible DOCX package; node types are converted to native Word structures stage by stage, and until then they are written as plain paragraphs with their numbers and resolved references — see [docs/backend.md](docs/backend.md).
 
 ## Requirements
 
@@ -92,6 +92,7 @@ Tests that need the real Pandoc 3.9 are skipped when it is not on PATH. All othe
 | `caps.py` | Capability registry: support category for each skipped construct |
 | `normalize.py` | Placeholders, image checks, equation labels, Pandoc clean-ups; element classification |
 | `tree.py` | Pandoc AST traversal and validation |
+| `backend/` | DOCX writer: `package.py` (clean package, reproducible ZIP), `writer.py` (routes every model node), `check.py` (OOXML integrity checks run on every output) |
 | `ir/` | Document model: `nodes.py` (content tree), `context.py` (styles, numbering, relationships, references, source map), `build.py` (two passes); no python-docx or lxml |
 | `diag.py` | Diagnostics and the report |
 | `ir.py` | Semantic IR; must not import python-docx or lxml |
