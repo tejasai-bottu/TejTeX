@@ -59,11 +59,11 @@ def image(n, s, rep):
     el = "\\includegraphics{%s}" % src
     i = s.text.find(src)
     loc = s.where(i) if i >= 0 else ""
-    p, why = check(s.base, s.root, src)
+    p, why = check(s.root, src)
     if why:
         rep.add("error", "unsupported", el, "rejected: " + why, loc)
         return span({"element": el, "category": "unsupported", "loc": loc, "text": f"[TejTeX: image {src} rejected]"})
-    if not any((s.base / (src + e)).is_file() for e in EXTS):
+    if not any((s.root / (src + e)).is_file() for e in EXTS):
         rep.add("warning", "", el, "image file not found", loc)
     return n
 
@@ -92,6 +92,7 @@ def name(n, partial):
 
 def run(ast, s, rep):
     partial = {d.element for d in rep.diags if d.category == "partial"}
+    done = set()
     for lst, i in tree.each(ast["blocks"]):
         n = lst[i]
         t = n.get("t")
@@ -105,10 +106,10 @@ def run(ast, s, rep):
                 n = lst[i] = span(info)
         elif t == "Image":
             n = lst[i] = image(n, s, rep)
-        elif t == "Math":
+        elif t == "Math" and id(n) not in done:
             labels = LABEL.findall(n["c"][1])
             if labels:
-                n["c"][1] = LABEL.sub("", n["c"][1])
+                done.add(id(n))
                 n = lst[i] = {"t": "Span", "c": [[labels[0], ["tejtex-equation"], [["labels", " ".join(labels)]]], [n]]}
         elif t == "Cite":
             n["c"][1] = [x for x in n["c"][1] if x.get("t") != "RawInline"]

@@ -14,7 +14,8 @@ DATA = Path(__file__).parent / "data"
 
 
 def read(name, **kw):
-    return frontend.read(DATA / name / "main.tex", Config(**kw))
+    ast, rep, s = frontend.read(DATA / name / "main.tex", Config(**kw))
+    return ast, rep
 
 
 def find(ast, pred):
@@ -85,8 +86,7 @@ def test_sec63_normalized_tree(real_pandoc):
     assert attr(entry[0], "key") == "knuth84"
     assert entry[1:3] == [{"t": "Space"}, {"t": "Str", "c": "D."}]
     eq = find(ast, lambda n: "tejtex-equation" in classes(n))
-    assert eq[0]["c"][0][0] == "eq:a"
-    assert "\\label" not in eq[0]["c"][1][0]["c"][1]
+    assert eq[0]["c"][0] == ["eq:a", ["tejtex-equation"], [["labels", "eq:a"]]]
     refs = find(ast, lambda n: n.get("t") == "Link")
     assert sorted(attr(r, "reference") for r in refs) == ["eq:a", "fig:a", "sec:method", "tab:a"]
     cites = find(ast, lambda n: n.get("t") == "Cite")
@@ -144,14 +144,16 @@ def test_images(real_pandoc):
 
 
 def test_root_option(real_pandoc, tmp_path):
-    shutil.copytree(DATA / "includes", tmp_path / "proj" / "includes")
-    (tmp_path / "proj" / "outside.tex").write_text("NOWINSIDE", encoding="utf-8")
-    src = tmp_path / "proj" / "includes" / "main.tex"
-    ast, rep = frontend.read(src, Config())
-    assert "NOWINSIDE" not in json.dumps(ast)
-    ast, rep = frontend.read(src, Config(root=str(tmp_path / "proj")))
-    assert "NOWINSIDE" in json.dumps(ast)
-    assert "\\input{../outside}" not in {d.element for d in rep.diags}
+    (tmp_path / "paper").mkdir()
+    (tmp_path / "shared").mkdir()
+    (tmp_path / "shared" / "intro.tex").write_text("SHAREDINTRO", encoding="utf-8")
+    src = tmp_path / "paper" / "main.tex"
+    src.write_text("\\begin{document}\n\\input{shared/intro}\n\\end{document}\n", encoding="utf-8")
+    ast, rep, _ = frontend.read(src, Config())
+    assert "SHAREDINTRO" not in json.dumps(ast)
+    ast, rep, _ = frontend.read(src, Config(root=str(tmp_path)))
+    assert "SHAREDINTRO" in json.dumps(ast)
+    assert rep.diags == []
 
 
 def test_sec63_compiles_with_placeholders(real_pandoc, tmp_path):

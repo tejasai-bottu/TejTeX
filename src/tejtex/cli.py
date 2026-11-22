@@ -27,7 +27,7 @@ def parser():
     c.add_argument("--pandoc", default=Config.pandoc, help="pandoc executable (default: %(default)s)")
     c.add_argument("--timeout", type=positive, default=Config.timeout, help="pandoc time limit in seconds (default: %(default)s)")
     c.add_argument("--max-memory", type=positive, default=Config.memory, help="pandoc memory limit in MB (default: %(default)s)")
-    c.add_argument("--root", help="project root; included files and images must be inside it (default: folder of the input)")
+    c.add_argument("--root", help="project root; included files and images are resolved relative to it and must stay inside it (default: folder of the input)")
     g = c.add_mutually_exclusive_group()
     g.add_argument("-v", "--verbose", action="store_true", help="show debug messages")
     g.add_argument("-q", "--quiet", action="store_true", help="show errors only")

@@ -2,7 +2,7 @@
 
 TejTeX compiles LaTeX source into native, structurally editable Microsoft Word (DOCX) documents. It maps the semantic structure of the source (headings, paragraphs, lists, tables, figures, captions, references and styles) onto Word's own document structures and leaves layout and pagination to Word.
 
-**Status: Phase 2 (frontend).** The pipeline runs end to end (Pandoc frontend → IR → DOCX backend). The frontend resolves included files, runs Pandoc safely, classifies every LaTeX construct and reports what it cannot convert. The backend still writes every block as a plain paragraph; headings, lists, tables and images become native Word structures in Phases 3–4.
+**Status: Phase 3 (document model).** The frontend resolves included files, runs Pandoc safely, classifies every LaTeX construct and reports what it cannot convert. The document model numbers sections, figures, tables, equations, theorems and list items, resolves every `\ref` and citation, and assigns Word styles, list numbering, bookmarks and relationships — see [docs/ir.md](docs/ir.md). The backend still writes plain paragraphs (with numbers and resolved references); native Word structures come in Phase 4.
 
 ## Requirements
 
@@ -40,7 +40,9 @@ On Windows with Smart App Control turned on, the `tejtex.exe` launcher that pip 
 
 ## Project root and included files
 
-TejTeX resolves `\input` and `\include` itself, relative to the main file's folder as LaTeX does, and only inside the project root. Absolute paths, URLs, paths that leave the root (also through symbolic links), missing files and circular includes are reported and replaced by a visible placeholder. Images follow the same rules. Pandoc runs with `--sandbox`, so it cannot read files or fetch URLs on its own.
+The project root is the folder that contains the main `.tex` file, or the folder given with `--root`. TejTeX resolves `\input`, `\include` and `\includegraphics` itself, and every path is relative to the project root — also inside included files, at any depth. A path that leaves the root (with `..`, an absolute path, a drive letter, a URL or a symbolic link), a missing file and a circular include are reported and replaced by a visible placeholder. Pandoc runs with `--sandbox`, so it cannot read files or fetch URLs on its own.
+
+For example, with `main.tex` in `paper/`, a file `paper/chapters/a.tex` that wants `paper/chapters/b.tex` writes `\input{chapters/b}`, not `\input{b}`.
 
 Limits: 16 levels of nested includes, 256 files and 20 million characters of source. Going over a limit stops compilation with exit code 6.
 
@@ -55,7 +57,9 @@ Every construct Pandoc skips is reported with its file, line and column and one 
 | unsupported | not converted; layout commands are ignored, content is replaced by a visible placeholder | `\vspace`, `\centering`, unknown commands, `geometry` |
 | render | needs rendering as an image (later phase); a visible placeholder for now | TikZ |
 
-The choice of Pandoc reader mode behind this is recorded in [docs/decisions/0001-pandoc-reader-mode.md](docs/decisions/0001-pandoc-reader-mode.md).
+The choice of Pandoc reader mode behind this is recorded in [docs/decisions/0001-pandoc-reader-mode.md](docs/decisions/0001-pandoc-reader-mode.md), the path rule in [docs/decisions/0002-project-root.md](docs/decisions/0002-project-root.md).
+
+The document model adds warnings for undefined labels (`\ref{x}` shows `??`), labels defined twice and citation keys missing from the bibliography, each with its file, line and column.
 
 ## Exit codes
 
@@ -88,6 +92,7 @@ Tests that need the real Pandoc 3.9 are skipped when it is not on PATH. All othe
 | `caps.py` | Capability registry: support category for each skipped construct |
 | `normalize.py` | Placeholders, image checks, equation labels, Pandoc clean-ups; element classification |
 | `tree.py` | Pandoc AST traversal and validation |
+| `ir/` | Document model: `nodes.py` (content tree), `context.py` (styles, numbering, relationships, references, source map), `build.py` (two passes); no python-docx or lxml |
 | `diag.py` | Diagnostics and the report |
 | `ir.py` | Semantic IR; must not import python-docx or lxml |
 | `backend.py` | DOCX writer |

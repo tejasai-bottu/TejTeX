@@ -97,26 +97,45 @@ def test_symlink_out_of_root_rejected(tmp_path, skipper):
 
 def test_check():
     root = Path.cwd().resolve()
-    assert source.check(root, root, "a/b.tex")[1] is None
-    assert source.check(root, root, "../x.tex")[1] == "path leaves the project folder"
-    assert source.check(root, root, "a/../../x.tex")[1] == "path leaves the project folder"
-    assert source.check(root, root, "/etc/passwd")[1] == "absolute paths are not allowed"
-    assert source.check(root, root, "C:/Windows/win.ini")[1] == "URLs and drive paths are not allowed"
-    assert source.check(root, root, "https://example.com/a.tex")[1] == "URLs and drive paths are not allowed"
-    assert source.check(root / "sub", root, "../x.tex")[1] is None
+    assert source.check(root, "a/b.tex")[1] is None
+    assert source.check(root, "../x.tex")[1] == "path leaves the project folder"
+    assert source.check(root, "a/../../x.tex")[1] == "path leaves the project folder"
+    assert source.check(root, "/etc/passwd")[1] == "absolute paths are not allowed"
+    assert source.check(root, "C:/Windows/win.ini")[1] == "URLs and drive paths are not allowed"
+    assert source.check(root, "https://example.com/a.tex")[1] == "URLs and drive paths are not allowed"
 
 
-def test_paths_are_relative_to_the_main_file(tmp_path):
+def test_nested_includes_resolve_against_the_root(tmp_path):
+    proj = tmp_path / "proj"
+    write(tmp_path / "escape.tex", "ESCAPED")
+    write(proj / "chapters" / "a.tex", "A1\n\\input{chapters/b}\n\\input{b}\n\\input{../escape}\n\\input{chapters/deep/c}\n")
+    write(proj / "chapters" / "b.tex", "B1")
+    write(proj / "chapters" / "deep" / "c.tex", "C1 \\input{chapters/b}")
+    main = write(proj / "main.tex", "\\input{chapters/a}")
+    s, rep = load(main)
+    assert "A1" in s.text
+    assert s.text.count("B1") == 2
+    assert "C1" in s.text
+    assert "ESCAPED" not in s.text
+    d = {x.element: x for x in rep.diags}
+    assert d["\\input{b}"].message == "not included: file not found"
+    assert d["\\input{b}"].loc == "chapters/a.tex:3:1"
+    assert d["\\input{../escape}"].message == "not included: path leaves the project folder"
+    assert d["\\input{../escape}"].loc == "chapters/a.tex:4:1"
+    assert len(rep.diags) == 2
+
+
+def test_explicit_root_is_used_for_every_path(tmp_path):
     write(tmp_path / "shared" / "macros.tex", "SHARED")
     write(tmp_path / "paper" / "intro.tex", "INTRO")
-    main = write(tmp_path / "paper" / "main.tex", "\\input{intro} \\input{../shared/macros}")
-    s, rep = load(main)
-    assert "INTRO" in s.text
-    assert "SHARED" not in s.text
+    main = write(tmp_path / "paper" / "main.tex", "\\input{paper/intro} \\input{shared/macros} \\input{intro}")
     s, rep = load(main, tmp_path)
     assert "INTRO" in s.text
     assert "SHARED" in s.text
-    assert rep.diags == []
+    assert [x.element for x in rep.diags] == ["\\input{intro}"]
+    s, rep = load(main)
+    assert "INTRO" in s.text
+    assert "SHARED" not in s.text
 
 
 def test_main_outside_root(tmp_path):

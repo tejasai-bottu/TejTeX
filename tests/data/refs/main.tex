@@ -1,0 +1,63 @@
+\documentclass{report}
+\usepackage{amsmath,amsthm,graphicx,hyperref,cleveref}
+\newtheorem{theorem}{Theorem}[chapter]
+\newtheorem{lemma}[theorem]{Lemma}
+\title{Reference Test}
+\author{Ann One \and Bob Two}
+\date{2026}
+\begin{document}
+\maketitle
+\begin{abstract}
+Short abstract.
+\end{abstract}
+\chapter{Intro}\label{ch:intro}
+Forward: Figure~\ref{fig:later}, Table~\ref{tab:later}, Equation~\eqref{eq:second}, Theorem~\ref{thm:main}, item~\ref{it:two}, \cref{fig:later}.
+Missing: \ref{nope}. Cite \cite{alpha} and \cite{beta,gamma}.
+\section{Background}\label{sec:bg}
+Text with \emph{emphasis}, \textbf{bold}, \texttt{code}, \url{https://example.org} and \href{https://example.com}{a link}.\footnote{A note.\label{fn:one}}
+\subsection{Details}\label{sec:details}
+\begin{enumerate}
+  \item First
+  \item\label{it:two} Second
+  \begin{enumerate}
+    \item\label{it:nested} Nested
+  \end{enumerate}
+\end{enumerate}
+\begin{itemize}
+  \item Bullet
+\end{itemize}
+\begin{description}
+  \item[Term] Definition.
+\end{description}
+\chapter{Results}\label{ch:results}
+\begin{figure}
+  \includegraphics{plot.png}
+  \caption{A plot}\label{fig:later}
+\end{figure}
+\begin{table}
+  \caption{A table}\label{tab:later}
+  \begin{tabular}{lr}
+    \hline
+    Name & Value \\
+    \hline
+    a & 1 \\
+  \end{tabular}
+\end{table}
+\begin{align}
+  a &= b \label{eq:first} \\
+  c &= d \nonumber \\
+  e &= f \label{eq:second}
+\end{align}
+\begin{theorem}[Main]\label{thm:main}
+  Statement.
+\end{theorem}
+\begin{lemma}\label{lem:aux}
+  Helper.
+\end{lemma}
+Backward: Section~\ref{sec:bg}, Section~\ref{sec:details}, Equation~\eqref{eq:first}, Lemma~\ref{lem:aux}, footnote~\ref{fn:one}, item~\ref{it:nested}, \hyperref[ch:intro]{intro}.
+Again \label{sec:bg}
+\begin{thebibliography}{9}
+\bibitem{alpha} A. Author. First. 2020.
+\bibitem{beta} B. Author. Second. 2021.
+\end{thebibliography}
+\end{document}

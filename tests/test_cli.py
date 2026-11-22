@@ -97,7 +97,7 @@ def test_internal_error(tex, fake, monkeypatch):
 def test_compile_ok(tex, fake, monkeypatch, capsys):
     monkeypatch.setenv("FAKE_AST", json.dumps(AST))
     assert main(["compile", str(tex), "--pandoc", fake]) == Exit.OK
-    assert texts(tex.with_suffix(".docx")) == ["Intro", "Hello world."]
+    assert texts(tex.with_suffix(".docx")) == ["1 Intro", "Hello world."]
     assert "wrote" in capsys.readouterr().err
 
 
@@ -105,7 +105,7 @@ def test_compile_output_option(tex, fake, monkeypatch, tmp_path):
     monkeypatch.setenv("FAKE_AST", json.dumps(AST))
     out = tmp_path / "out.docx"
     assert main(["compile", str(tex), "-o", str(out), "--pandoc", fake, "-q"]) == Exit.OK
-    assert texts(out) == ["Intro", "Hello world."]
+    assert texts(out) == ["1 Intro", "Hello world."]
 
 
 def test_module_run(tmp_path):

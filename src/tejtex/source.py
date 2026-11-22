@@ -11,12 +11,12 @@ SCHEME = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*:")
 VERB = {"verbatim", "verbatim*", "Verbatim", "lstlisting", "minted", "comment"}
 
 
-def check(base, root, name):
+def check(root, name):
     if SCHEME.match(name):
         return None, "URLs and drive paths are not allowed"
     if name.startswith(("/", "\\")) or PurePosixPath(name).is_absolute():
         return None, "absolute paths are not allowed"
-    p = (base / name).resolve()
+    p = (root / name).resolve()
     if not p.is_relative_to(root):
         return None, "path leaves the project folder"
     return p, None
@@ -36,8 +36,7 @@ def read(p):
 
 
 class Source:
-    def __init__(self, base, root, cfg, rep):
-        self.base = base
+    def __init__(self, root, cfg, rep):
         self.root = root
         self.cfg = cfg
         self.rep = rep
@@ -126,7 +125,7 @@ class Source:
         names = [name] if name.endswith(".tex") else [name + ".tex", name]
         p = None
         for nm in names:
-            q, why = check(self.base, self.root, nm)
+            q, why = check(self.root, nm)
             if why:
                 return self.reject(el, why, loc, "error")
             if q.is_file():
@@ -159,7 +158,7 @@ def load(src, root, cfg, rep):
     text = read(p)
     if text is None:
         raise TejtexError(f"cannot read {src} as UTF-8 text", Exit.FILE)
-    s = Source(p.parent, root, cfg, rep)
+    s = Source(root, cfg, rep)
     r = p.relative_to(root).as_posix()
     s.expand(text, r, 0, [r])
     s.text = "".join(s.parts)

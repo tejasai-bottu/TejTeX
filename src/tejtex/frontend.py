@@ -61,6 +61,8 @@ def run(text, cfg):
             msgs = json.loads(logf.read_text("utf-8")) if logf.exists() else []
         except ValueError:
             raise TejtexError("pandoc returned invalid JSON", Exit.CONVERT)
+        except RecursionError:
+            raise TejtexError("the document is nested too deeply", Exit.LIMIT)
     return ast, msgs
 
 
@@ -118,7 +120,7 @@ def package(path, loc, s, rep):
     name = path[:-4]
     if name in caps.PACKAGES:
         rep.add("info", "unsupported", "package " + name, caps.PACKAGES[name], loc)
-    elif (s.base / path).is_file():
+    elif (s.root / path).is_file():
         rep.add("warning", "unsupported", "package " + name, "local package not loaded; its macros are not expanded", loc)
 
 
@@ -186,4 +188,4 @@ def read(src, cfg):
     bad = tree.check(ast)
     if bad:
         raise TejtexError("normalized AST is invalid: " + bad[0], Exit.INTERNAL)
-    return ast, rep
+    return ast, rep, s

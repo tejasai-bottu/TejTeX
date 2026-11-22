@@ -83,7 +83,7 @@ def test_equation_labels(tmp_path):
     span = ast["blocks"][0]["c"][0]
     assert span["t"] == "Span"
     assert span["c"][0] == ["eq:a", ["tejtex-equation"], [["labels", "eq:a eq:b"]]]
-    assert "\\label" not in span["c"][1][0]["c"][1]
+    assert "\\label{eq:b}" in span["c"][1][0]["c"][1]
 
 
 def test_bibliography_width_and_cite(tmp_path):

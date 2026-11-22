@@ -20,13 +20,13 @@ def compile_file(src, out, cfg):
         raise TejtexError(f"output must be a .docx file: {out}", Exit.FILE)
     if not out.parent.is_dir():
         raise TejtexError(f"output folder not found: {out.parent}", Exit.FILE)
-    ast, rep = frontend.read(src, cfg)
+    ast, rep, s = frontend.read(src, cfg)
+    doc = ir.build(ast, rep, s, cfg)
     for d in rep.diags:
         log.log(LEVELS.get(d.level, logging.INFO), "%s", d)
     if rep.diags:
         n = Counter(d.category or "other" for d in rep.diags)
         log.info("%d diagnostics: %s", len(rep.diags), ", ".join(f"{v} {k}" for k, v in sorted(n.items())))
-    doc = ir.build(ast)
     try:
         backend.write(doc, out)
     except OSError as e:

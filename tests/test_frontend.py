@@ -18,7 +18,7 @@ def test_parse_version():
 def test_read(real_pandoc, tmp_path):
     f = tmp_path / "a.tex"
     f.write_text("\\section{Intro}\nHello \\textbf{world}.\n", encoding="utf-8")
-    ast, rep = frontend.read(f, Config())
+    ast, rep, _ = frontend.read(f, Config())
     assert rep.diags == []
     assert ast["pandoc-api-version"][:2] == [1, 23]
     assert ast["blocks"][0]["t"] == "Header"

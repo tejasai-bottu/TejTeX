@@ -9,4 +9,6 @@ class Config:
     depth: int = 16
     files: int = 256
     size: int = 20_000_000
+    nodes: int = 1_000_000
+    nesting: int = 100
     root: str = None

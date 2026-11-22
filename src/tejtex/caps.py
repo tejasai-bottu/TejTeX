@@ -12,6 +12,7 @@ LAYOUT = {
 RENDER_ENVS = {"tikzpicture", "pgfpicture", "circuitikz", "forest", "pspicture", "tikzcd"}
 RENDER_CMDS = {"tikz"}
 MARK = {"tableofcontents", "listoffigures", "listoftables", "printbibliography"}
+HANDLED = {"maketitle": "title block is built from \\title, \\author and \\date"}
 PARTIAL_ENVS = {"thebibliography": "bibliography kept as plain text; entry keys are kept as anchors"}
 PACKAGES = {
     "geometry": "page size and margins are not transferred yet",
@@ -48,6 +49,8 @@ def skip(s):
     el = "\\" + name
     if name in RENDER_CMDS:
         return el, "render", "warning", True, "needs rendering; a placeholder is inserted"
+    if name in HANDLED:
+        return el, "supported", "info", False, HANDLED[name]
     if name in LAYOUT:
         return el, "unsupported", "info", False, "layout command ignored; Word handles layout"
     if name == "bibitem":
