@@ -1,7 +1,10 @@
 import json
 
+import pytest
+
 from tejtex import frontend
 from tejtex.config import Config
+from tejtex.errors import Exit, TejtexError
 
 
 def test_parse_version():
@@ -15,15 +18,21 @@ def test_parse_version():
 def test_read(real_pandoc, tmp_path):
     f = tmp_path / "a.tex"
     f.write_text("\\section{Intro}\nHello \\textbf{world}.\n", encoding="utf-8")
-    ast = frontend.read(f, Config())
+    ast, rep = frontend.read(f, Config())
+    assert rep.diags == []
     assert ast["pandoc-api-version"][:2] == [1, 23]
     assert ast["blocks"][0]["t"] == "Header"
 
 
-def test_sandbox_blocks_outside_file(real_pandoc, tmp_path):
+def test_pandoc_runs_sandboxed(real_pandoc, tmp_path):
     secret = tmp_path / "secret.tex"
     secret.write_text("TOPSECRET")
-    f = tmp_path / "a.tex"
-    f.write_text("Start \\input{" + secret.as_posix() + "} end.\n")
-    ast = frontend.read(f, Config())
+    ast, msgs = frontend.run("Start \\input{" + secret.as_posix() + "} end.\n", Config())
     assert "TOPSECRET" not in json.dumps(ast)
+
+
+def test_memory_cap(real_pandoc):
+    text = "\n\n".join(f"Paragraph {i} with some words here." for i in range(20000))
+    with pytest.raises(TejtexError) as e:
+        frontend.run(text, Config(memory=64))
+    assert e.value.code == Exit.LIMIT

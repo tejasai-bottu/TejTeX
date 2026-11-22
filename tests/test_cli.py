@@ -118,3 +118,35 @@ def test_console_script(tejtex_exe):
     r = subprocess.run([tejtex_exe, "--version"], capture_output=True, text=True)
     assert r.returncode == 0
     assert __version__ in r.stdout
+
+
+def test_bad_max_memory():
+    with pytest.raises(SystemExit) as e:
+        main(["compile", "a.tex", "--max-memory", "0"])
+    assert e.value.code == Exit.USAGE
+
+
+def test_pandoc_out_of_memory(tex, fake, monkeypatch):
+    monkeypatch.setenv("FAKE_MODE", "oom")
+    assert main(["compile", str(tex), "--pandoc", fake]) == Exit.LIMIT
+    assert not tex.with_suffix(".docx").exists()
+
+
+def test_root_must_contain_input(tex, fake, tmp_path):
+    other = tmp_path / "other"
+    assert main(["compile", str(tex), "--pandoc", fake, "--root", str(other)]) == Exit.FILE
+    other.mkdir()
+    assert main(["compile", str(tex), "--pandoc", fake, "--root", str(other)]) == Exit.FILE
+    assert main(["compile", str(tex), "--pandoc", fake, "--root", str(tmp_path)]) == Exit.OK
+
+
+def test_diagnostics_are_printed(tmp_path, fake, monkeypatch, capsys):
+    tex = tmp_path / "doc.tex"
+    tex.write_text("Hi.\n\\vspace{1cm}\nBye.\n", encoding="utf-8")
+    msgs = [{"type": "SkippedContent", "verbosity": "INFO", "contents": "\\vspace{1cm}", "source": "", "line": 2, "column": 13}]
+    monkeypatch.setenv("FAKE_LOG", json.dumps(msgs))
+    monkeypatch.setenv("FAKE_AST", json.dumps(AST))
+    assert main(["compile", str(tex), "--pandoc", fake]) == Exit.OK
+    err = capsys.readouterr().err
+    assert "doc.tex:2:1: \\vspace: layout command ignored" in err
+    assert "1 diagnostics: 1 unsupported" in err

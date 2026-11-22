@@ -11,13 +11,22 @@ from tejtex.errors import TejtexError
 
 FAKE = """
 import os, sys, time
-if "--version" in sys.argv:
+args = sys.argv[1:]
+if "--version" in args:
     print("pandoc " + os.environ.get("FAKE_VERSION", "3.9"))
     sys.exit(0)
+sys.stdin.read()
+for a in args:
+    if a.startswith("--log="):
+        with open(a[6:], "w") as f:
+            f.write(os.environ.get("FAKE_LOG", "[]"))
 mode = os.environ.get("FAKE_MODE", "ok")
 if mode == "fail":
     sys.stderr.write("Error at line 3\\n")
     sys.exit(64)
+if mode == "oom":
+    sys.stderr.write("pandoc: Heap exhausted;\\n")
+    sys.exit(251)
 if mode == "slow":
     time.sleep(5)
 if mode == "junk":
@@ -31,6 +40,11 @@ def skip(msg):
     if os.environ.get("TEJTEX_NO_SKIP"):
         pytest.fail(msg)
     pytest.skip(msg)
+
+
+@pytest.fixture
+def skipper():
+    return skip
 
 
 @pytest.fixture

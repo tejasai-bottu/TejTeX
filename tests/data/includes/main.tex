@@ -1,0 +1,16 @@
+\documentclass{article}
+\begin{document}
+\section{Main}
+Start.
+\input{chapters/one}
+% \input{chapters/commented}
+\begin{verbatim}
+\input{chapters/verbatim}
+\end{verbatim}
+\include{chapters/two}
+\input{../outside}
+\input{http://example.com/x}
+\input{chapters/missing}
+\input{chapters/loop}
+End.
+\end{document}
