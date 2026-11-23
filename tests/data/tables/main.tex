@@ -1,0 +1,44 @@
+\documentclass{article}
+\usepackage{multirow,booktabs}
+\begin{document}
+\section{Tables}
+\begin{table}[h]
+\centering
+\caption{Scores by group}\label{tab:scores}
+\begin{tabular}{|l|c|r|}
+\hline
+Group & \multicolumn{2}{c|}{Score} \\
+\hline
+\multirow{2}{*}{A} & 1 & \textbf{2} \\
+ & 3 & 4 \\
+\hline
+B & 5 & 6 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lp{0.4\linewidth}}
+\toprule
+Name & Notes \\
+\midrule
+Short & A longer cell that wraps. \\
+List &
+\begin{itemize}
+\item one
+\item two
+\end{itemize} \\
+Empty & \\
+\bottomrule
+\end{tabular}
+\caption{Booktabs table}\label{tab:notes}
+\end{table}
+
+\begin{tabular}{cc}
+x & y \\
+z
+\end{tabular}
+
+Table \ref{tab:scores} and Table \ref{tab:notes}.
+\end{document}

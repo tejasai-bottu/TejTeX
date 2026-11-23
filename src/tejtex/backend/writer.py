@@ -7,18 +7,16 @@ from ..ir.nodes import (
     Row, Rule, Table, TextRun, Theorem, block_lines, note_lines, text,
 )
 from .check import check
+from .media import Media
 from .numbering import build, left
 from .package import clean, new, save
 from .styles import ensure
+from .tables import ends_with_table, finish, grid
 
 
 def inner(b):
     if isinstance(b, (Quote, Container, Theorem)):
         return b.blocks
-    if isinstance(b, Figure):
-        return b.blocks + b.caption
-    if isinstance(b, Table):
-        return b.caption + [x for r in b.rows for c in r.cells for x in c.blocks]
     return None
 
 
@@ -29,11 +27,13 @@ class Writer:
         self.d = new(text(m.title), "; ".join(text(a) for a in m.authors))
         self.st = ensure(self.d, doc.ctx.styles)
         self.ids = build(self.d, doc.ctx.numbering)
+        self.media = Media(self.d, doc.ctx.rels.rels)
+        self.box = self.d
         self.pending = None
         self.indent = None
 
     def para(self, s="", style=None):
-        p = self.d.add_paragraph(style=self.st[style] if style else None)
+        p = self.box.add_paragraph(style=self.st[style] if style else None)
         f = p.paragraph_format
         if self.pending:
             kind, a, b = self.pending
@@ -95,6 +95,43 @@ class Writer:
                 self.para("", "Compact")
         self.indent = old
 
+    def caption(self, b, above=False):
+        for i, x in enumerate(b.caption):
+            if i == 0 and isinstance(x, Paragraph) and b.number:
+                p = self.para("", x.style)
+                p.add_run(f"{b.name} {b.number}: ")
+                self.inlines(p, x.inlines)
+                if above:
+                    p.paragraph_format.keep_with_next = True
+            else:
+                self.block(x)
+
+    def table(self, b):
+        self.caption(b, True)
+        if self.pending:
+            self.para("", "Compact")
+        if not any(r.cells for r in b.rows):
+            return
+        if ends_with_table(self.box):
+            self.para()
+        t, cells = grid(self.box, b)
+        t.style = self.st[b.style]
+        old = self.box, self.indent
+        self.indent = None
+        for r, c, rs, cs, cell in cells:
+            box = t.cell(r, c)
+            first = box.paragraphs[0]._p
+            self.box = box
+            for x in cell.blocks:
+                self.block(x)
+            finish(box, first, cell.align or (b.aligns[c] if c < len(b.aligns) else None), rs)
+        self.box, self.indent = old
+
+    def figure(self, b):
+        for x in b.blocks:
+            self.block(x)
+        self.caption(b)
+
     def heading(self, b):
         p = self.para("", b.style)
         if b.number:
@@ -136,6 +173,14 @@ class Writer:
         if x.code:
             r.style = self.st["VerbatimChar"]
 
+    def image(self, p, x):
+        inline = self.media.inline(x)
+        if inline is None:
+            r = p.add_run(clean(f"[image: {x.path}]"))
+            r.style = self.st.get("PlaceholderChar")
+        else:
+            p.add_run()._r.add_drawing(inline)
+
     def brk(self, p, x):
         p.add_run().add_break()
 
@@ -168,12 +213,12 @@ class Writer:
 
 
 BLOCKS = {
-    Paragraph: Writer.paragraph, Heading: Writer.heading, List: Writer.items, Table: None, Figure: None, Theorem: None,
+    Paragraph: Writer.paragraph, Heading: Writer.heading, List: Writer.items, Table: Writer.table, Figure: Writer.figure, Theorem: None,
     Bibliography: None, Quote: None, Container: None, CodeBlock: None, Rule: None, Placeholder: Writer.notice,
 }
 INLINES = {
     TextRun: Writer.textrun, Break: Writer.brk, Placeholder: Writer.placeholder, Math: None, Citation: None,
-    CrossReference: None, Hyperlink: None, Image: None, Footnote: None, Anchor: None,
+    CrossReference: None, Hyperlink: None, Image: Writer.image, Footnote: None, Anchor: None,
 }
 PARTS = {Document, Meta, ListItem, Row, Cell, BibEntry}
 

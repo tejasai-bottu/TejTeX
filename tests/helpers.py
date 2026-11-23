@@ -1,11 +1,13 @@
 import io
+import struct
 import zipfile
+import zlib
 
 from lxml import etree
 
 from tejtex.diag import Report
 from tejtex.ir.context import DocumentContext
-from tejtex.ir.nodes import Document, List, ListItem, Meta, Placeholder, TextRun, walk
+from tejtex.ir.nodes import Document, Image, List, ListItem, Meta, Placeholder, TextRun, walk
 
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
@@ -22,6 +24,8 @@ def make(blocks, meta=None):
             use("VerbatimChar")
         if isinstance(n, Placeholder):
             use("PlaceholderChar" if n.inline else "Placeholder")
+        if isinstance(n, Image) and not n.rel:
+            use("PlaceholderChar")
         if isinstance(n, List):
             use("Compact")
             if n.kind != "description":
@@ -124,3 +128,14 @@ def labels(data):
                 label = label.replace(f"%{k + 1}", SHOW[fmt](c.get(k, 1)))
         out.append((label, t))
     return out
+
+
+def png(w, h, dpi=None):
+    def chunk(t, data):
+        return struct.pack(">I", len(data)) + t + data + struct.pack(">I", zlib.crc32(t + data))
+    out = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
+    if dpi:
+        ppm = round(dpi / 0.0254)
+        out += chunk(b"pHYs", struct.pack(">IIB", ppm, ppm, 1))
+    raw = b"".join(b"\x00" + b"\xff\xff\xff" * w for _ in range(h))
+    return out + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b"")

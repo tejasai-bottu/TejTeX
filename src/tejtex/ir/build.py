@@ -26,6 +26,7 @@ MARK = {
     "Superscript": "sup", "Subscript": "sub", "SmallCaps": "smallcaps",
 }
 NAMES = {"section": "Section", "figure": "Figure", "table": "Table", "equation": "Equation"}
+RASTER = {b"\x89PNG": ".png", b"\xff\xd8\xff": ".jpg", b"GIF8": ".gif", b"BM": ".bmp", b"II*\x00": ".tif", b"MM\x00*": ".tif"}
 CMDS = {"ref": "ref", "eqref": "eqref", "ref+label": "cref", "ref+Label": "Cref", "pageref": "pageref"}
 ROMAN = [(1000, "m"), (900, "cm"), (500, "d"), (400, "cd"), (100, "c"), (90, "xc"),
          (50, "l"), (40, "xl"), (10, "x"), (9, "ix"), (5, "v"), (4, "iv"), (1, "i")]
@@ -75,6 +76,18 @@ def plain(inls):
         elif t in ("Code", "Math"):
             out.append(c[1])
     return "".join(out)
+
+
+def sniff(p):
+    try:
+        with open(p, "rb") as f:
+            head = f.read(8)
+    except OSError:
+        return None
+    for magic, ext in RASTER.items():
+        if head.startswith(magic):
+            return ext
+    return None
 
 
 def custom(it):
@@ -326,7 +339,12 @@ class Builder:
         for e in EXTS:
             p = (self.root / (url + e)).resolve()
             if p.is_relative_to(self.root) and p.is_file():
-                self.info[id(n)] = self.ctx.rels.image(p)
+                ext = sniff(p)
+                if ext:
+                    self.info[id(n)] = self.ctx.rels.image(p, ext)
+                else:
+                    el = "\\includegraphics{%s}" % url
+                    self.ctx.diags.add("warning", "render", el, "needs rendering; a placeholder is inserted", self.ctx.source.find(url))
                 return
 
     def link1(self, n):
@@ -451,8 +469,9 @@ class Builder:
             rows += [self.row(r, d) for r in b[2] + b[3]]
         rows += [self.row(r, d) for r in foot[1]]
         aligns = [ALIGN.get(s[0]["t"]) for s in specs]
+        widths = [s[1].get("c") if s[1]["t"] == "ColWidth" else None for s in specs]
         return Table(rows, aligns, nhead, self.blocks(cap[1], d + 1, "Caption"), num,
-                     tg.bookmark if tg else None, tg.label if tg else None, self.use("Table"), tg.src if tg else "")
+                     tg.bookmark if tg else None, tg.label if tg else None, self.use("Table"), tg.src if tg else "", widths)
 
     def row(self, r, d):
         cells = []
@@ -626,9 +645,12 @@ class Builder:
     def image(self, n):
         a, alt, target = n["c"]
         rel = self.info.get(id(n))
+        if not rel:
+            self.use("PlaceholderChar")
         at = dict(a[2])
+        text = plain(alt)
         return Image(target[0], rel.id if rel else None, rel.target if rel else None,
-                     at.get("width"), at.get("height"), plain(alt), self.ctx.source.find(target[0]))
+                     at.get("width"), at.get("height"), "" if text == "image" else text, self.ctx.source.find(target[0]))
 
     def span(self, n, d, fmt, out):
         a, kids = n["c"]

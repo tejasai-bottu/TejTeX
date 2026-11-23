@@ -147,6 +147,8 @@ class Table:
     label: str = None
     style: str = "Table"
     src: str = ""
+    widths: list = field(default_factory=list)
+    name: str = "Table"
 
 
 @dataclass
@@ -157,6 +159,7 @@ class Figure:
     bookmark: str = None
     label: str = None
     src: str = ""
+    name: str = "Figure"
 
 
 @dataclass

@@ -3,6 +3,8 @@ import subprocess
 from pathlib import Path
 
 import docx
+from docx.oxml.ns import qn
+from docx.text.paragraph import Paragraph
 
 from tejtex.cli import main
 from tejtex.errors import Exit
@@ -11,7 +13,8 @@ EXAMPLE = Path(__file__).parent.parent / "examples" / "main.tex"
 
 
 def texts(path):
-    return [p.text for p in docx.Document(str(path)).paragraphs]
+    d = docx.Document(str(path))
+    return [Paragraph(p, d).text for p in d.element.body.iter(qn("w:p"))]
 
 
 def test_example_compiles(real_pandoc, tmp_path):

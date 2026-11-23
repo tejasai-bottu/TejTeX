@@ -33,7 +33,9 @@ STYLES = [
     Style("VerbatimChar", "Verbatim Char", "character"),
     Style("FootnoteReference", "footnote reference", "character"),
     Style("PlaceholderChar", "TejTeX Placeholder Char", "character"),
-    Style("Table", "Table", "table"),
+    Style("TableNormal", "Normal Table", "table"),
+    Style("TableGrid", "Table Grid", "table", "TableNormal"),
+    Style("Table", "Table", "table", "TableGrid"),
 ]
 
 
@@ -150,12 +152,12 @@ class RelationshipManager:
             self.index[key] = r
         return self.index[key]
 
-    def image(self, path):
+    def image(self, path, ext=None):
         key = "image:" + str(path)
         if key in self.index:
             return self.index[key]
         n = sum(1 for r in self.rels if r.kind == "image") + 1
-        return self.add(key, "image", f"media/image{n}{path.suffix.lower()}", str(path))
+        return self.add(key, "image", f"media/image{n}{ext or path.suffix.lower()}", str(path))
 
     def link(self, url):
         return self.add("link:" + url, "hyperlink", url, None, True)

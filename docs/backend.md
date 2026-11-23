@@ -17,9 +17,9 @@ backend.write(doc, out)           # render, then write the file
 
 - Every model node type is routed (`writer.BLOCKS`, `writer.INLINES`; `ListItem`, `Row`, `Cell`, `BibEntry`, `Meta` and `Document` are handled by their parents). A test fails if a node type is added to the model without a route. A node of an unknown type is an internal error (exit code 1).
 - A node type with a native handler is written as Word structures. A node type without one goes through the **text fallback**, so no content is lost while the stages below are built:
-  - a container whose own structure is not native yet (`Table`, `Figure`, `Theorem`, `Quote`, `Container`) writes its child blocks through the normal routing, so their paragraphs and runs are native; only the container's own structure (table grid, …) is still missing;
+  - a container whose own structure is not native yet (`Theorem`, `Quote`, `Container`) writes its child blocks through the normal routing, so their paragraphs and runs are native;
   - a block without children (`Bibliography`, `CodeBlock`, `Rule`) is written as plain `Normal` paragraphs with its text;
-  - an inline node without a handler (`Math`, `Citation`, `CrossReference`, `Hyperlink`, `Image`, `Footnote`) is written as a plain run with its text, resolved number or `[image: path]`; footnote texts follow at the end of the document.
+  - an inline node without a handler (`Math`, `Citation`, `CrossReference`, `Hyperlink`, `Footnote`) is written as a plain run with its text or resolved number; footnote texts follow at the end of the document.
 - Every package is checked before it is written (below). A package that fails is an internal error, and no file is written.
 
 ## Package
@@ -64,7 +64,7 @@ The model decides which styles a document uses (`StyleRegistry`); the backend ma
 | Verbatim Char | character | Consolas |
 | footnote reference (built-in) | character | superscript |
 | TejTeX Placeholder Char | character | red italic |
-| Table | table | template default |
+| Table | table, based on Table Grid | single 0.5 pt borders on every cell (inherited) |
 
 Word's own style names are used for built-in styles, so Word treats them as its built-in styles.
 
@@ -90,6 +90,41 @@ Limitations:
 - Math in a custom label is shown as its TeX source (`\star`) until Phase 5.
 - enumitem `resume` is reported and not applied; the list restarts.
 
+## Tables (Stage 4.4, part 1)
+
+`Table` → a native `w:tbl` (`backend/tables.py`):
+
+- **Grid.** The cells are placed on the grid the way Word expects: a cell is put in the first free column of its row, skipping columns that a row span from above still covers. A row with fewer cells than the table is padded with empty cells.
+- **Merged cells.** A column span becomes `w:gridSpan`. A row span becomes `w:vMerge` (`restart`, then `continue` in the rows below), with the text centred vertically, as `\multirow` does.
+- **Header rows.** The model's header rows (`\hline` or `\midrule` after the first row) get `w:tblHeader`, so Word repeats them on every page.
+- **Alignment.** A cell's own alignment (`\multicolumn{2}{c}{…}`) or its column's (`l`, `c`, `r`) is written as paragraph alignment in the cell. Left is Word's default and is not written.
+- **Widths.** Columns with a relative width from the model (`p{0.4\linewidth}`) get that share of the text width. The other columns share the rest equally, at least 0.5 in each. The table spans the text width, like a table inserted in Word.
+- **Borders.** The table uses the `Table` style, which is based on Word's built-in `Table Grid`, so every cell has a thin border. Changing the `Table` style in Word restyles every table at once.
+- **Cells.** Cell content goes through the normal routing, so paragraphs, runs, lists, images and nested tables in a cell are native. A nested table is followed by an empty paragraph, which Word requires. Two tables in a row are separated by an empty paragraph, because Word joins adjacent tables into one.
+- **Captions.** The caption goes above the table, as `Table 1: Scores by group`, in Word's `caption` style, and is kept with the table. The number and the word "Table" come from the model.
+
+Limitations:
+
+- Pandoc does not keep the source's rules (`|`, `\hline`, `\toprule`), so every table gets the same grid borders.
+- Pandoc does not keep the caption's position either, so a caption written below a table in LaTeX goes above it.
+- Fixed widths (`p{3cm}`) arrive without a size and are treated like automatic columns.
+
+## Images and figures (Stage 4.4, part 2)
+
+`Image` → a DrawingML inline picture (`wp:inline`) in a run (`backend/media.py`):
+
+- **Parts.** Each relationship from the model becomes one part, `word/media/image<n>.<ext>`, related to the document with the model's id (`rTej1`, …). An image used several times is stored once and every use points to the same part. Content types come from the file.
+- **Formats.** The model accepts PNG, JPEG, GIF, BMP and TIFF, recognised by their first bytes, not by their names. PDF, EPS, SVG and anything else get a `render` diagnostic with the source location and a visible placeholder (`[image: figs/plot.pdf]`). A missing file gets a warning (Phase 2) and the same placeholder.
+- **Size.** `width` and `height` from `\includegraphics` in `%`, `in`, `cm`, `mm`, `pt`, `bp`, `pc`, `px`, `em`, `ex` or as a multiple of `\linewidth`, `\textwidth`, `\columnwidth` or `\textheight`. With one of them the aspect ratio is kept. With neither, the image's own size and resolution are used. An image wider than the text is scaled down to the text width.
+- **Alt text.** Alt text from the source is written to `wp:docPr/@descr`; Pandoc's default text `image` is not. Every picture has a unique `docPr` id.
+- **Figures.** A `Figure` writes its blocks (`Figure` style: centred, kept with the caption), then the caption below, as `Figure 2: Two plots`.
+
+Limitations:
+
+- `scale=` and `angle=` are dropped by Pandoc without a report.
+- Vector images need the renderer (a later phase).
+- A file with a valid header but broken content is shown as a placeholder without a diagnostic.
+
 ## Validation (`backend/check.py`)
 
 `check(data)` returns a list of problems; empty means the package passed.
@@ -111,6 +146,6 @@ Opening the output in Microsoft Word and LibreOffice is the final check (Stage 4
 | 4.1 | Package foundation, contract, validation, determinism | — (text fallback for all) | Done |
 | 4.2 | Styles and paragraphs | `Paragraph`, `Heading`, `TextRun`, `Break`, `Placeholder`, metadata | Done |
 | 4.3 | Numbering and lists | `List`, `ListItem` (`numbering.xml`, `w:numPr`), custom item labels, description lists | Done |
-| 4.4 | Tables and images | `Table`, `Figure`, `Image` (`word/media`, DrawingML) | Planned |
+| 4.4 | Tables and images | `Table`, `Row`, `Cell` (`w:tbl`, spans, header rows, widths), `Figure`, `Image` (`word/media`, DrawingML inline), captions | Done |
 | 4.5 | Bookmarks and hyperlinks | `Anchor`, `CrossReference`, `Hyperlink`, bookmarks on headings, figures, tables, equations, theorems, bibliography entries | Planned |
 | 4.6 | Integration and compatibility | `Bibliography`, `CodeBlock`, `Rule`, `Theorem`, `Quote`, `Container`, `Math`, `Citation`, `Footnote`; Word and LibreOffice open checks | Planned |

@@ -4,6 +4,8 @@ from pathlib import Path
 
 import docx
 import pytest
+from docx.oxml.ns import qn
+from docx.text.paragraph import Paragraph
 
 from tejtex import backend, frontend, ir
 from tejtex.backend.check import check
@@ -13,7 +15,7 @@ from tejtex.errors import Exit
 from tejtex.ir.nodes import Citation, CrossReference, Image, Math, Placeholder, TextRun, walk
 
 DATA = Path(__file__).parent / "data"
-CORPUS = ["sec63", "unknown", "includes", "images", "refs", "format", "lists"]
+CORPUS = ["sec63", "unknown", "includes", "images", "refs", "format", "lists", "tables", "media"]
 
 
 def render(name):
@@ -31,7 +33,10 @@ def test_corpus_output_is_a_valid_package(real_pandoc, name):
 @pytest.mark.parametrize("name", CORPUS)
 def test_no_content_is_dropped(real_pandoc, name):
     d, data = render(name)
-    out = "\n".join(p.text for p in docx.Document(io.BytesIO(data)).paragraphs)
+    doc = docx.Document(io.BytesIO(data))
+    out = "\n".join(Paragraph(p, doc).text for p in doc.element.body.iter(qn("w:p")))
+    xml = doc.element.xml
+    media = {p.partname for p in doc.part.package.iter_parts()}
     for n in walk(d):
         if isinstance(n, TextRun):
             s = n.text.strip()
@@ -39,6 +44,9 @@ def test_no_content_is_dropped(real_pandoc, name):
             s = n.text
         elif isinstance(n, Math):
             s = n.tex.strip()
+        elif isinstance(n, Image) and n.rel:
+            assert f'r:embed="{n.rel}"' in xml and "/word/" + n.media in media
+            continue
         elif isinstance(n, Image):
             s = f"[image: {n.path}]"
         else:

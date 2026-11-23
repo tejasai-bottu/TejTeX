@@ -4,6 +4,8 @@ import sys
 
 import docx
 import pytest
+from docx.oxml.ns import qn
+from docx.text.paragraph import Paragraph
 
 from tejtex import __version__
 from tejtex.cli import main
@@ -20,7 +22,8 @@ AST = {
 
 
 def texts(path):
-    return [p.text for p in docx.Document(str(path)).paragraphs]
+    d = docx.Document(str(path))
+    return [Paragraph(p, d).text for p in d.element.body.iter(qn("w:p"))]
 
 
 def test_version(capsys):

@@ -66,7 +66,7 @@ def test_ir_does_not_import_docx_or_lxml():
 
 
 def test_every_supported_node_type_has_a_representation(tmp_path):
-    (tmp_path / "f.png").write_bytes(b"x")
+    (tmp_path / "f.png").write_bytes(b"\x89PNG\r\n\x1a\n")
     cell = [A, {"t": "AlignLeft"}, 1, 1, [{"t": "Plain", "c": [s("cell")]}]]
     cite = {"t": "Cite", "c": [[{"citationId": "k", "citationPrefix": [], "citationSuffix": [], "citationMode": {"t": "NormalCitation"}, "citationNoteNum": 0, "citationHash": 0}], []]}
     ast = doc(
@@ -363,6 +363,31 @@ def test_list_levels_and_description_lists():
     a = d.ctx.numbering.nums[ls[2].num - 1].abstract
     levels = next(x for x in d.ctx.numbering.abstracts.values() if x.id == a).levels
     assert (levels[2].fmt, levels[2].text) == ("decimal", "%3.")
+
+
+def test_images_need_a_format_word_can_show(tmp_path):
+    (tmp_path / "a.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    (tmp_path / "photo").write_bytes(b"\xff\xd8\xff\xe0")
+    (tmp_path / "v.pdf").write_bytes(b"%PDF-1.4")
+    def im(x, alt="image"):
+        return {"t": "Image", "c": [A, [s(alt)], [x, ""]]}
+    ast = doc(para(im("a.png"), im("photo", "A photo"), im("v.pdf"), im("a")))
+    d, rep = build(ast, Src("\\includegraphics{v.pdf}", tmp_path))
+    imgs = nodes(d, Image)
+    assert [(i.rel, i.media, i.alt) for i in imgs] == [
+        ("rTej1", "media/image1.png", ""), ("rTej2", "media/image2.jpg", "A photo"), (None, None, ""), ("rTej1", "media/image1.png", "")]
+    assert [(x.element, x.category) for x in rep.diags] == [("\\includegraphics{v.pdf}", "render")]
+    assert "PlaceholderChar" in d.ctx.styles.used
+
+
+def test_tables_keep_column_widths_and_names():
+    cell = [A, {"t": "AlignDefault"}, 1, 1, [{"t": "Plain", "c": [s("c")]}]]
+    specs = [[{"t": "AlignLeft"}, {"t": "ColWidthDefault"}], [{"t": "AlignRight"}, {"t": "ColWidth", "c": 0.3}]]
+    tab = {"t": "Table", "c": [A, [None, []], specs, [A, []], [[A, 0, [], [[A, [cell, cell]]]]], [A, []]]}
+    d, rep = build(doc(tab))
+    t = nodes(d, Table)[0]
+    assert (t.widths, t.aligns, t.name, t.style) == ([None, 0.3], ["left", "right"], "Table", "Table")
+    assert {"Table", "TableGrid", "TableNormal"} <= set(d.ctx.styles.used)
 
 
 def test_limits():

@@ -13,8 +13,8 @@ doc = ir.build(ast, report, source, config)   # Document(meta, blocks, ctx)
 | `Para`, `Plain`, `LineBlock` | `Paragraph(style, inlines)` |
 | `Header` | `Heading(level, inlines, style, number, bookmark, label, src)` |
 | `BulletList`, `OrderedList`, `DefinitionList` | `List(kind, items, num, level, start)` with `ListItem(blocks, term, label, num)` — `label` is a custom `\item[...]` label and `num` its numbering instance |
-| `Table` (and the `Div` Pandoc wraps around a labelled table) | `Table(rows, aligns, head, caption, number, bookmark, label, style, src)` with `Row` and `Cell(blocks, align, rowspan, colspan)` |
-| `Figure` | `Figure(blocks, caption, number, bookmark, label, src)` |
+| `Table` (and the `Div` Pandoc wraps around a labelled table) | `Table(rows, aligns, head, caption, number, bookmark, label, style, src, widths, name)` with `Row` and `Cell(blocks, align, rowspan, colspan)`; `widths` holds Pandoc's relative column widths (`p{0.4\linewidth}` → `0.4`, otherwise `None`); `name` is the caption word (`Table`) |
+| `Figure` | `Figure(blocks, caption, number, bookmark, label, src, name)` |
 | theorem-like `Div` | `Theorem(kind, name, blocks, number, title, bookmark, label, src)` — Pandoc's static "Theorem 1.1 (Title)." prefix is parsed and removed |
 | `Div.thebibliography` | `Bibliography(entries)` with `BibEntry(key, number, inlines, bookmark)` |
 | other `Div` | `Container(kind, blocks, bookmark, label)` |
@@ -25,7 +25,7 @@ doc = ir.build(ast, report, source, config)   # Document(meta, blocks, ctx)
 | `Link` with `reference-type` | `CrossReference(label, kind, text, bookmark, src)` |
 | other `Link` | `Hyperlink(inlines, url, rel, bookmark)` |
 | `Cite` | `Citation(keys, text, bookmarks, mode, src)` |
-| `Image` | `Image(path, rel, media, width, height, alt, src)` |
+| `Image` | `Image(path, rel, media, width, height, alt, src)` — `rel` is set only for a file Word can show (PNG, JPEG, GIF, BMP, TIFF, recognised by content); other formats get a `render` diagnostic; Pandoc's default alt text `image` becomes empty |
 | `Note` | `Footnote(number, blocks)` |
 | `Span` with an id, bibliography anchors | `Anchor(bookmark, label)` |
 | TejTeX placeholders | `Placeholder(category, element, text, src, inline)` |
@@ -38,9 +38,9 @@ doc = ir.build(ast, report, source, config)   # Document(meta, blocks, ctx)
 
 | Component | Holds |
 |---|---|
-| `StyleRegistry` | Semantic paragraph, character and table styles (`BodyText`, `Compact`, `Heading1`–`Heading6` named `heading 1`… so Word's Navigation Pane sees them, `Caption`, `Bibliography`, `FootnoteText`, `Hyperlink`, `TejTeX Placeholder`, …), each with its base style; records which styles the document uses |
+| `StyleRegistry` | Semantic paragraph, character and table styles (`BodyText`, `Compact`, `Heading1`–`Heading6` named `heading 1`… so Word's Navigation Pane sees them, `Caption`, `Bibliography`, `FootnoteText`, `Hyperlink`, `TejTeX Placeholder`, `Table` based on Word's `Table Grid`, …), each with its base style; records which styles the document uses |
 | `NumberingEngine` | One abstract list definition per list kind, format and offset (LaTeX defaults: `1.`, `(a)`, `i.`, `A.`; bullets `•`, `–`, `∗`, `·`) and one numbering instance per list with its nesting level and start value, so every list restarts like LaTeX and nested lists are indented by level. Labels follow the depth of each kind, as in LaTeX: an `enumerate` inside an `itemize` is numbered `1.`, not `(a)`, but indented one level deeper. A custom `\item[...]` label gets one instance per label text, with format `none` and the label as its text |
-| `RelationshipManager` | Relationship ids (`rTej1`, …) for images and external hyperlinks; media part names `media/image<n>.<ext>` are generated, never taken from source paths; the same file or URL gets the same relationship |
+| `RelationshipManager` | Relationship ids (`rTej1`, …) for images and external hyperlinks; media part names `media/image<n>.<ext>` are generated, never taken from source paths, with the extension of the detected format; the same file or URL gets the same relationship |
 | `ReferenceTracker` | Every label and bibliography key with its kind, number, bookmark name and source location; duplicates are reported |
 | `SourceMap` | File, line and column of `\label`, `\ref`-family commands, `\cite`-family commands and image paths, through the Phase 2 source map |
 | `diags` | The diagnostics report |
