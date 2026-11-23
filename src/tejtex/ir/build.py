@@ -4,11 +4,12 @@ from pathlib import Path
 from .. import tree
 from ..errors import Exit, TejtexError
 from ..normalize import EXTS
+from . import bib
 from .context import DELIMS, FORMATS, DocumentContext, counter
 from .nodes import (
     Anchor, BibEntry, Bibliography, Break, Cell, Citation, CodeBlock, Container, CrossReference,
     Document, Figure, Footnote, Heading, Hyperlink, Image, List, ListItem, Math, Meta, Paragraph,
-    Placeholder, Quote, Row, Rule, Table, TextRun, Theorem, merge, tidy,
+    Placeholder, Quote, Row, Rule, Seq, Table, TextRun, Theorem, merge, tidy,
 )
 
 ENV = re.compile(r"\s*\\begin\{(\w+)(\*?)\}")
@@ -17,6 +18,11 @@ TAG = re.compile(r"\\tag\*?\s*\{([^}]*)\}")
 NONUM = re.compile(r"\\(?:nonumber|notag)(?![A-Za-z])")
 THM = re.compile(r"(.+?)\s+(\d[\w.]*)$")
 SAFE = re.compile(r"(?:https?|ftp)://[^\s\"<>\\^`{|}]+|mailto:[^\s\"<>\\^`{|}]+", re.I)
+NEWTHM = re.compile(r"\\newtheorem(\*?)\s*\{([^}]*)\}\s*(?:\[([^\]]*)\])?\s*\{[^}]*\}\s*(?:\[([^\]]*)\])?")
+NOSORT = re.compile(r"sorting\s*=\s*none")
+WITHIN = re.compile(r"\\numberwithin\s*\{([^}]*)\}\s*\{([^}]*)\}")
+SEQS = {"figure": "Figure", "table": "Table", "equation": "Equation"}
+FIELDS = {"figure", "table", "equation"}
 ENUMITEM = re.compile(r"\\usepackage\s*(?:\[[^\]]*\])?\s*\{[^}]*\benumitem\b")
 NUMBERED = {"equation", "align", "gather", "multline", "flalign", "alignat", "eqnarray"}
 ROWS = {"align", "gather", "flalign", "alignat", "eqnarray"}
@@ -77,6 +83,13 @@ def plain(inls):
         elif t in ("Code", "Math"):
             out.append(c[1])
     return "".join(out)
+
+
+def seq_name(c):
+    if c in SEQS:
+        return SEQS[c]
+    s = re.sub(r"[^A-Za-z0-9_]", "_", c)
+    return (s if s[:1].isalpha() else "C" + s)[:40]
 
 
 def sniff(p):
@@ -190,15 +203,55 @@ class Builder:
         self.sec = [0] * 6
         self.chapters = src is not None and "\\chapter" in src.text
         self.enumitem = src is not None and ENUMITEM.search(src.text) is not None
-        self.fig = self.tab = self.eq = self.notes = self.bibn = 0
+        self.notes = self.bibn = 0
         self.current = None
         self.root = Path(src.root).resolve() if src is not None else None
+        self.counts = {}
+        self.within = {c: 1 if self.chapters else 0 for c in FIELDS}
+        self.share = {}
+        self.cited = []
+        self.made = []
+        self.nobib = set()
+        self.static = set()
+        self.star = set()
+        self.bst = ""
+        text = src.text if src is not None else ""
+        for m in NEWTHM.finditer(text):
+            if m[1]:
+                self.star.add(m[2].strip())
+                continue
+            env = m[2].strip()
+            if m[3]:
+                self.share[env] = m[3].strip()
+            else:
+                self.share[env] = env
+                self.within[env] = self.level(m[4].strip()) if m[4] else 0
+        for m in WITHIN.finditer(text):
+            lv = self.level(m[2].strip())
+            if lv is None:
+                el = "\\numberwithin{%s}{%s}" % (m[1].strip(), m[2].strip())
+                self.ctx.diags.add("warning", "partial", el, "Word restarts numbers only at heading levels 1-3; this number runs on", "")
+            else:
+                self.within[m[1].strip()] = lv
 
     def use(self, sid):
         return self.ctx.styles.use(sid)
 
-    def prefix(self):
-        return f"{self.sec[0]}." if self.chapters else ""
+    def level(self, name):
+        lv = {"chapter": 0, "section": 1, "subsection": 2, "subsubsection": 3}.get(name)
+        if lv is None:
+            return None
+        lv += 1 if self.chapters else 0
+        return lv if 1 <= lv <= 3 else None
+
+    def step(self, c):
+        self.counts[c] = self.counts.get(c, 0) + 1
+        lv = self.within.get(c) or 0
+        pre = ".".join(str(x) for x in self.sec[:lv]) + "." if lv else ""
+        return pre + str(self.counts[c])
+
+    def seq(self, c):
+        return Seq(seq_name(c), self.within.get(c) or 0)
 
     def at(self, label):
         return self.ctx.source.label(label)
@@ -231,6 +284,8 @@ class Builder:
             path = path + [("note", str(self.notes), None)]
         elif t == "Image":
             self.image1(n)
+        elif t == "Cite":
+            self.cited += [x["citationId"] for x in n["c"][0]]
         elif t == "Link":
             self.link1(n)
         elif t in ("BulletList", "OrderedList", "DefinitionList"):
@@ -248,29 +303,25 @@ class Builder:
             for k in range(level, 6):
                 self.sec[k] = 0
             num = ".".join(str(x) for x in self.sec[:level])
-            if level == 1 and self.chapters:
-                self.fig = self.tab = self.eq = 0
+            for c, lv in self.within.items():
+                if lv and level <= lv:
+                    self.counts[c] = 0
             self.current = num
+            self.ctx.numbering.headings()
         t = self.ctx.refs.add(a[0], "section", num, self.at(a[0])) if a[0] else None
         self.info[id(n)] = (num, t)
 
     def figure(self, n):
         a, cap, _ = n["c"]
-        num = None
-        if cap[1]:
-            self.fig += 1
-            num = self.prefix() + str(self.fig)
+        num = self.step("figure") if cap[1] else None
         t = self.ctx.refs.add(a[0], "figure", num, self.at(a[0])) if a[0] else None
-        self.info[id(n)] = (num, t)
+        self.info[id(n)] = (num, t, self.seq("figure") if num else None)
 
     def table1(self, n):
         a, cap = n["c"][0], n["c"][1]
-        num = None
-        if cap[1]:
-            self.tab += 1
-            num = self.prefix() + str(self.tab)
+        num = self.step("table") if cap[1] else None
         t = self.ctx.refs.add(a[0], "table", num, self.at(a[0])) if a[0] else None
-        self.info[id(n)] = [num, t]
+        self.info[id(n)] = [num, t, self.seq("table") if num else None]
 
     def div1(self, n, d, path):
         a, body = n["c"]
@@ -284,11 +335,26 @@ class Builder:
             return False
         th = theorem(body) if cls and cls[0] not in PLAIN_DIVS else None
         if th:
-            t = self.ctx.refs.add(a[0], cls[0], th[1], self.at(a[0])) if a[0] else None
-            self.info[id(n)] = (th, t)
+            num, sq = self.thm(cls[0], th[1], a[0])
+            t = self.ctx.refs.add(a[0], cls[0], num, self.at(a[0])) if a[0] else None
+            self.info[id(n)] = ((th[0], num), t, sq)
         elif a[0]:
             self.info[id(n)] = (None, self.ctx.refs.add(a[0], "label", self.current, self.at(a[0])))
         return False
+
+    def thm(self, env, number, label):
+        if not number or env in self.star:
+            return None, None
+        c = self.share.get(env)
+        if c is not None and self.share.get(c, c) != c:
+            c = self.share[c]
+        if c is not None and self.within.get(c) is not None:
+            return self.step(c), self.seq(c)
+        if env not in self.static:
+            self.static.add(env)
+            loc = self.at(label) if label else ""
+            self.ctx.diags.add("info", "partial", env, "numbering scheme not found; the number is kept as static text", loc)
+        return number, None
 
     def here(self, path):
         for i in range(len(path) - 1, -1, -1):
@@ -325,12 +391,11 @@ class Builder:
             if tag:
                 text = tag[1]
             elif numbered and not NONUM.search(r):
-                self.eq += 1
-                text = self.prefix() + str(self.eq)
+                text = self.step("equation")
             else:
                 continue
             t = self.ctx.refs.add(label, "equation", text, self.at(label)) if label else None
-            nums.append((text, t.bookmark if t else None, label))
+            nums.append((text, t.bookmark if t else None, label, None if tag else self.seq("equation")))
         self.info[id(n)] = nums
 
     def image1(self, n):
@@ -452,9 +517,9 @@ class Builder:
             return [self.table(n, d)]
         if t == "Figure":
             a, cap, body = c
-            num, tg = self.info.get(id(n), (None, None))
+            num, tg, sq = self.info.get(id(n), (None, None, None))
             return [Figure(self.blocks(body, d + 1, "Figure"), self.blocks(cap[1], d + 1, "Caption"), num,
-                           tg.bookmark if tg else None, a[0] or None, tg.src if tg else "")]
+                           tg.bookmark if tg else None, a[0] or None, tg.src if tg else "", seq=sq)]
         if t == "Div":
             return self.div(n, d, style)
         return []
@@ -468,7 +533,7 @@ class Builder:
 
     def table(self, n, d):
         a, cap, specs, head, bodies, foot = n["c"]
-        num, tg = self.info.get(id(n), (None, None))
+        num, tg, sq = self.info.get(id(n), (None, None, None))
         rows = [self.row(r, d) for r in head[1]]
         nhead = len(rows)
         for b in bodies:
@@ -477,7 +542,8 @@ class Builder:
         aligns = [ALIGN.get(s[0]["t"]) for s in specs]
         widths = [s[1].get("c") if s[1]["t"] == "ColWidth" else None for s in specs]
         return Table(rows, aligns, nhead, self.blocks(cap[1], d + 1, "Caption"), num,
-                     tg.bookmark if tg else None, tg.label if tg else None, self.use("Table"), tg.src if tg else "", widths)
+                     tg.bookmark if tg else None, tg.label if tg else None, self.use("Table"), tg.src if tg else "", widths,
+                     seq=sq)
 
     def row(self, r, d):
         cells = []
@@ -495,7 +561,7 @@ class Builder:
         if a[0] and not cls and len(body) == 1 and body[0].get("t") == "Table":
             return [self.table(body[0], d + 1)]
         if "thebibliography" in cls:
-            return [self.bibliography(body, d)]
+            return [self.refhead(), self.bibliography(body, d)]
         info = self.info.get(id(n))
         if info and info[0]:
             return [self.theorem(n, d, info)]
@@ -504,7 +570,7 @@ class Builder:
 
     def theorem(self, n, d, info):
         a, body = n["c"]
-        (name, number), tg = info
+        (name, number), tg, sq = info
         first = body[0]["c"][1:]
         i = skip_spaces(first, 0)
         title = []
@@ -522,7 +588,7 @@ class Builder:
         rest = first[skip_spaces(first, i):]
         blocks = [{"t": body[0]["t"], "c": rest}] + body[1:]
         return Theorem(a[1][0], name, self.blocks(blocks, d + 1, "BodyText"), number, self.inl(title, d + 1),
-                       tg.bookmark if tg else None, a[0] or None, tg.src if tg else "")
+                       tg.bookmark if tg else None, a[0] or None, tg.src if tg else "", sq)
 
     def bibliography(self, body, d):
         entries = []
@@ -544,8 +610,42 @@ class Builder:
         out = []
         for key, inls in entries:
             t = self.ctx.refs.bib.get(key) if key else None
-            out.append(BibEntry(key, t.number if t else None, self.inl(trim(inls), d + 1), t.bookmark if t else None))
+            num = t.number if t else None
+            out.append(BibEntry(key, num, self.inl(trim(inls), d + 1), t.bookmark if t else None, Seq("Bib") if num else None))
         return Bibliography(out)
+
+    def refhead(self):
+        return Heading(1, [TextRun("Bibliography" if self.chapters else "References")], self.use("Heading1"))
+
+    def bibfile(self, src):
+        if self.ctx.refs.bib or src is None or not getattr(src, "bibs", None):
+            return
+        entries = []
+        seen = set()
+        for rel, text, loc in src.bibs:
+            for e in bib.parse(text):
+                if e["key"] not in seen:
+                    seen.add(e["key"])
+                    entries.append(e)
+        self.bst = (src.bibstyle or "").strip()
+        style = self.bst
+        if not style and src.biblatex:
+            style = "none" if NOSORT.search(src.text) else "nty"
+        self.made = bib.order(entries, self.cited + list(src.nocite), style)
+        for i, e in enumerate(self.made, 1):
+            self.ctx.refs.cite(e["key"], str(i))
+
+    def references(self):
+        self.use("Bibliography")
+        out = []
+        for e in self.made:
+            t = self.ctx.refs.bib[e["key"]]
+            inls, url = bib.runs(e, bool(self.bst))
+            if url and SAFE.fullmatch(url):
+                self.use("Hyperlink")
+                inls += [TextRun(" "), Hyperlink([TextRun(url)], url, self.ctx.rels.link(url).id)]
+            out.append(BibEntry(e["key"], t.number, inls, t.bookmark, Seq("Bib")))
+        return [self.refhead(), Bibliography(out)]
 
     def inl(self, lst, d, fmt=None):
         out = []
@@ -609,10 +709,14 @@ class Builder:
         else:
             nums = keys
             marks = [None] * len(keys)
+            for k in keys:
+                if k not in self.nobib:
+                    self.nobib.add(k)
+                    self.ctx.diags.add("warning", "", "\\cite{%s}" % k, "no bibliography found; the citation shows its key", src)
         suffix = plain(cs[-1]["citationSuffix"]).strip() if cs else ""
         text = "[" + ", ".join(nums) + (", " + suffix if suffix else "") + "]"
         mode = cs[0]["citationMode"]["t"] if cs else "NormalCitation"
-        return Citation(keys, text, marks, mode, src)
+        return Citation(keys, text, marks, mode, src, nums, suffix)
 
     def link(self, n, d, fmt):
         a, kids, target = n["c"]
@@ -638,15 +742,18 @@ class Builder:
             self.ctx.diags.add("warning", "", el, "reference to an undefined label", src)
             return CrossReference(label, kind, "(??)" if kind == "eqref" else "??", None, src)
         num = tg.number
+        before = after = ""
         if num and kind == "eqref":
-            text = f"({num})"
+            before, after = "(", ")"
         elif num and kind.startswith("ref+"):
-            text = f"{NAMES.get(tg.kind, tg.kind.capitalize())} {num}"
-        elif num:
-            text = num
-        else:
-            text = plain(kids) or "??"
-        return CrossReference(label, kind, text, tg.bookmark, src)
+            before = f"{NAMES.get(tg.kind, tg.kind.capitalize())} "
+        text = before + num + after if num else plain(kids) or "??"
+        field = None
+        if num and tg.kind == "section":
+            field = "paragraph"
+        elif num and tg.kind not in ("label", "bibitem"):
+            field = "text"
+        return CrossReference(label, kind, text, tg.bookmark, src, field, num if field else None, before, after)
 
     def image(self, n):
         a, alt, target = n["c"]
@@ -712,8 +819,11 @@ def build(ast, rep, src, cfg):
     b = Builder(rep, src, cfg)
     for n in ast["blocks"]:
         b.visit(n, 1, [])
+    b.bibfile(src)
     for label, loc in b.ctx.refs.dups:
         rep.add("warning", "", "\\label{%s}" % label, "label defined more than once; the first one is used", loc)
     meta = b.meta(ast.get("meta", {}))
     blocks = b.blocks(ast["blocks"], 1, "BodyText")
+    if b.made:
+        blocks += b.references()
     return Document(meta, blocks, b.ctx)

@@ -16,7 +16,7 @@ def test_render():
 def test_environments():
     assert caps.skip("\\begin{foo}")[:2] == ("foo", "partial")
     assert caps.skip("\\end{foo}") is None
-    assert caps.skip("\\begin{thebibliography}")[4].startswith("bibliography")
+    assert caps.skip("\\begin{thebibliography}")[4].startswith("entries are numbered")
 
 
 def test_options_and_bibitem():

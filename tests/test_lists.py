@@ -150,7 +150,7 @@ def test_lists_corpus_follows_latex(real_pandoc):
     assert check(data) == []
     got = [(a, t.strip()) for a, t in labels(data)]
     assert got == [
-        (None, "1Lists"), ("1.", "First step."), ("2.", "Second step."), ("(a)", "Inner one."),
+        ("1", "Lists"), ("1.", "First step."), ("2.", "Second step."), ("(a)", "Inner one."),
         ("(b)", "Inner two."), ("i.", "Deep one."), ("A.", "Deepest one."), ("(x)", "Custom label."),
         ("3.", "Third step."), (None, "A second paragraph in the third step."), ("4.", ""),
         ("•", "Item that starts with a list."), ("5.", ""), ("•", "Bullet one."), ("–", "Bullet two."),

@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from helpers import W, make, paras, part, style
+from helpers import W, labels, make, paras, part, style
 from tejtex import backend, frontend, ir
 from tejtex.backend.check import check
 from tejtex.config import Config
@@ -26,12 +26,13 @@ def test_paragraph_styles():
 
 
 def test_headings_use_builtin_styles_with_outline_levels():
-    hs = [Heading(i, [TextRun(f"H{i}")], f"Heading{i}", "2.1" if i == 2 else None) for i in range(1, 7)]
+    nums = ["1", "1.1", "1.1.1", None, None, None]
+    hs = [Heading(i, [TextRun(f"H{i}")], f"Heading{i}", nums[i - 1]) for i in range(1, 7)]
     data = render(*hs)
     got = paras(data)
     assert [s for s, _ in got] == [f"Heading{i}" for i in range(1, 7)]
-    assert got[1][1] == [("2.1\t", set()), ("H2", set())]
-    assert got[0][1] == [("H1", set())]
+    assert [r for _, r in got] == [[(f"H{i}", set())] for i in range(1, 7)]
+    assert [a for a, _ in labels(data)] == nums
     for i in range(1, 7):
         s = style(data, f"Heading{i}")
         assert s.find(f"{W}name").get(W + "val") == f"heading {i}"
@@ -113,11 +114,15 @@ def test_containers_write_their_paragraphs_natively():
     assert paras(data) == [("BlockText", [("quoted", set())]), ("Compact", [("item", {"b"})])]
 
 
-def corpus(name):
+def raw(name):
     ast, rep, s = frontend.read(DATA / name / "main.tex", Config())
     data = backend.render(ir.build(ast, rep, s, Config()))
     assert check(data) == []
-    return paras(data)
+    return data
+
+
+def corpus(name):
+    return paras(raw(name))
 
 
 def test_format_corpus_runs(real_pandoc):
@@ -134,16 +139,24 @@ def test_format_corpus_runs(real_pandoc):
     ]
 
 
+def heads(data):
+    return [(s, a, t) for (s, _), (a, t) in zip(paras(data), labels(data)) if s and s.startswith("Heading")]
+
+
 def test_format_corpus_structure(real_pandoc):
     got = corpus("format")
     assert [s for s, _ in got[:5]] == ["Title", "Author", "Author", "Date", "Abstract"]
-    heads = [(s, r[0][0]) for s, r in got if s and s.startswith("Heading")]
-    assert heads == [("Heading1", "1\t"), ("Heading2", "1.1\t"), ("Heading3", "1.1.1\t"), ("Heading4", "Fourth level"), ("Heading1", "Unnumbered")]
+    assert heads(raw("format")) == [
+        ("Heading1", "1", "Runs"), ("Heading2", "1.1", "Second level"), ("Heading3", "1.1.1", "Third level"),
+        ("Heading4", None, "Fourth level"), ("Heading1", None, "Unnumbered"),
+    ]
     assert ("BlockText", [("A quoted paragraph.", set())]) in got
     assert ("Placeholder", [("[TejTeX: tikzpicture needs rendering]", set())]) in got
     assert any(("[TejTeX: \\unknowncmd is not supported]", {"rStyle=PlaceholderChar"}) in r for _, r in got)
 
 
 def test_refs_corpus_headings(real_pandoc):
-    heads = [(s, r[0][0]) for s, r in corpus("refs") if s and s.startswith("Heading")]
-    assert heads == [("Heading1", "1\t"), ("Heading2", "1.1\t"), ("Heading3", "1.1.1\t"), ("Heading1", "2\t")]
+    assert heads(raw("refs")) == [
+        ("Heading1", "1", "Intro"), ("Heading2", "1.1", "Background"), ("Heading3", "1.1.1", "Details"),
+        ("Heading1", "2", "Results"), ("Heading1", None, "Bibliography"),
+    ]

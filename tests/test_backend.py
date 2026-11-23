@@ -8,7 +8,7 @@ from pathlib import Path
 import docx
 import pytest
 
-from helpers import make
+from helpers import make, shown
 from tejtex import backend
 from tejtex.backend import writer
 from tejtex.errors import Exit, TejtexError
@@ -30,7 +30,8 @@ def test_write(tmp_path):
     out = tmp_path / "a.docx"
     d = make([Heading(1, [TextRun("Head")], "Heading1", "1"), Paragraph("BodyText", [TextRun("one")])])
     backend.write(d, out)
-    assert [p.text for p in docx.Document(str(out)).paragraphs] == ["1\tHead", "one"]
+    assert [p.text for p in docx.Document(str(out)).paragraphs] == ["Head", "one"]
+    assert shown(out.read_bytes()) == ["1\tHead", "one"]
 
 
 def test_output_is_byte_identical():

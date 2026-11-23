@@ -1,6 +1,6 @@
 # The DOCX backend
 
-Phase 4. Package `tejtex.backend`. It writes the document model (`tejtex.ir`, see [ir.md](ir.md)) as a DOCX package.
+Phases 4 and 5. Package `tejtex.backend`. It writes the document model (`tejtex.ir`, see [ir.md](ir.md)) as a DOCX package.
 
 ## Rule: the model owns meaning, the backend owns representation
 
@@ -18,8 +18,8 @@ backend.write(doc, out)           # render, then write the file
 - Every model node type is routed (`writer.BLOCKS`, `writer.INLINES`; `ListItem`, `Row`, `Cell`, `BibEntry`, `Meta` and `Document` are handled by their parents). A test fails if a node type is added to the model without a route. A node of an unknown type is an internal error (exit code 1).
 - A node type with a native handler is written as Word structures. Two node types still go through the **text fallback**, so no content is lost:
   - `Rule` (a horizontal rule) has no text and writes nothing;
-  - the footnote marker (`Footnote` inline) is written as `[1]`. The footnote's own text follows at the end of the document as `[1] text` paragraphs in the `footnote text` style, and labels inside it become bookmarks there. Native Word footnotes (`footnotes.xml`) are Phase 5.
-- Mathematics stays TeX source text until Phase 5 (OMML). Display equations carry their numbers, so references to them work (below).
+  - the footnote marker (`Footnote` inline) is written as `[1]`. The footnote's own text follows at the end of the document as `[1] text` paragraphs in the `footnote text` style, and labels inside it become bookmarks there. Native Word footnotes (`footnotes.xml`) are a later phase.
+- Mathematics stays TeX source text until a later phase (OMML). Display equations carry their numbers as fields, so references to them work (below).
 - Every package is checked before it is written (below). A package that fails is an internal error, and no file is written.
 
 ## Package
@@ -40,7 +40,7 @@ The ZIP is rewritten with a fixed timestamp (1980-01-01) and a stable entry orde
 ## Paragraphs, headings and runs (Stage 4.2)
 
 - `Paragraph` → `w:p` with the model's style (`BodyText`, `Compact`, `BlockText`, `Caption`, …).
-- `Heading` → `w:p` with Word's built-in `heading 1`–`heading 6` style (outline levels 0–5), which puts it in Word's Navigation Pane and LibreOffice's Navigator. The paragraph carries no direct formatting, so changing its style in Word behaves normally. The number from the model is written as a plain run followed by a tab (`2.1⇥Results`); native heading numbering linked to the heading styles is Phase 5 (RQ2).
+- `Heading` → `w:p` with Word's built-in `heading 1`–`heading 6` style (outline levels 0–5), which puts it in Word's Navigation Pane and LibreOffice's Navigator. The paragraph carries no direct formatting, so changing its style in Word behaves normally. Since Phase 5 the number is not text: it comes from the outline list linked to the heading styles (see "Dynamic numbering and fields").
 - `TextRun` → `w:r` with only the properties the model sets: `w:b`, `w:i`, `w:u`, `w:strike`, `w:vertAlign` (superscript/subscript), `w:smallCaps`; code uses the `Verbatim Char` character style. Italic is whatever the model says, so `\emph` inside italic text is upright, as in LaTeX.
 - `Break` → `w:br`. Characters that XML 1.0 does not allow (control characters, lone surrogates) are removed.
 - Placeholders: inline → run with the `TejTeX Placeholder Char` style, block → paragraph with the `TejTeX Placeholder` style (both red italic), so unsupported content stays visible.
@@ -88,7 +88,7 @@ The model gives every list its numbering instance (abstract definition, level, s
 Limitations:
 
 - One paragraph holds one number, so an item that starts with a nested list shows its number on its own line; LaTeX puts both on one line.
-- Math in a custom label is shown as its TeX source (`\star`) until Phase 5.
+- Math in a custom label is shown as its TeX source (`\star`) until a later phase.
 - enumitem `resume` is reported and not applied; the list restarts.
 
 ## Tables (Stage 4.4, part 1)
@@ -134,18 +134,20 @@ The model gives every label a Word bookmark name and resolves every reference; t
 
 | Label on | Bookmark spans |
 |---|---|
-| `\section`…`\subsubsection`, `\chapter` | the heading's number and text (`2.1⇥Results`) |
-| figure, table with a caption | the caption's label, number and text (`Figure 2: A plot`) |
+| `\section`…`\subsubsection`, `\chapter` | the heading's text (`Results`); its number comes from the outline list |
+| figure, table with a caption | the caption's number fields (`2.1`) |
 | figure, table without a caption | an empty bookmark at the start of the figure's first paragraph, or of the table's first cell |
-| equation (each numbered row) | the number `(2)` written after the equation |
-| theorem-like environment | the head (`Theorem 1`) |
-| `\bibitem` | the entry label `[1]` |
+| equation (each numbered row) | the number fields inside the parentheses (`2`) |
+| theorem-like environment | the number fields (`1.1`); the name (`Note`) when it is unnumbered |
+| `\bibitem`, `.bib` entry | the number field inside the brackets (`1`) |
 | `\label` in a list item, footnote or paragraph | an empty bookmark at the label's position |
 | other labelled environment | an empty bookmark at the start of its first paragraph |
 
 Names follow Word's rules (a letter first, then letters, digits and `_`, at most 40 characters) and are unique ignoring case. The model makes them so: `fig:a` → `fig_a`, a second label that normalises to the same name → `fig_a_2`, `1abc` → `L1abc`, long labels are cut to 40 characters with a numeric suffix when needed. A label defined twice keeps its first place and gets a warning. The original LaTeX label stays in the model (`label` fields) and in the source map.
 
-**Internal links** — `w:hyperlink w:anchor="<bookmark>"` around the text the model resolved: `\ref` (`2.1`), `\eqref` (`(2)`), `\autoref`/`\cref` (`Figure 2`), `\hyperref[label]{text}`, and citations (`[1, 2]` links to the first entry). Forward and backward references work the same way because the model resolves them before anything is written. An undefined reference is written as `??` (`(??)` for `\eqref`) without a link; the model has already warned with the source location. Internal links have no character style, so they look like the surrounding text, as in a printed LaTeX document.
+A bookmark wraps exactly what LaTeX's `\ref` prints for the label, so a `REF` field to it gives the same text (Phase 5).
+
+**Internal links** — references to numbered headings, figures, tables, equations and theorems, and the numbers in citations, are `REF` fields since Phase 5 (see "Dynamic numbering and fields"). The rest are `w:hyperlink w:anchor="<bookmark>"` around the text the model resolved: references to list items (`2(a)i`), footnotes and other labels, and `\hyperref[label]{text}`. Forward and backward references work the same way because the model resolves them before anything is written. An undefined reference is written as `??` (`(??)` for `\eqref`) without a link; the model has already warned with the source location. Internal links have no character style, so they look like the surrounding text, as in a printed LaTeX document.
 
 **External links** — `\href{url}{text}` and `\url{url}` become `w:hyperlink r:id="rTej<n>"` with the model's relationship id, a `TargetMode="External"` relationship in `word/_rels/document.xml.rels`, and the `Hyperlink` character style on their runs (runs with their own character style, such as code, keep it). The model allows only `http`, `https`, `ftp` and `mailto` targets without spaces or quotes. Anything else (`javascript:`, `file:`, `data:`, relative paths) keeps its text without a link and gets a `partial` warning with the source location.
 
@@ -153,10 +155,46 @@ Links are never nested: a reference inside the text of another link is written a
 
 ## Theorems, bibliography, code and footnotes (Stage 4.6)
 
-- **Theorems.** `Theorem 1 (Title).` starts the first paragraph of the body, with the name, number and final full stop in bold, as LaTeX's default theorem style prints it. The body's italics come from the model.
-- **Bibliography.** One paragraph per entry in the `Bibliography` style (hanging indent): `[1] Author. Title. Year.`
+- **Theorems.** `Theorem 1 (Title).` starts the first paragraph of the body, with the name, number and final full stop in bold, as LaTeX's default theorem style prints it. The body's italics come from the model. Since Phase 5 the number is a field.
+- **Bibliography.** One paragraph per entry in the `Bibliography` style (hanging indent): `[1] Author. Title. Year.` Since Phase 5 the number is a field, and entries can come from `.bib` files (see [ir.md](ir.md)). The entry text is static; titles are italic where the style puts them in italics, and a URL is an external link.
 - **Code blocks.** One paragraph in the `Source Code` style; line breaks are kept.
 - **Footnotes.** At the end of the document, see the contract above.
+
+## Dynamic numbering and fields (Phase 5)
+
+Numbers that LaTeX computes are Word structures that Word recomputes. Inserting, deleting or moving a heading, figure, table, equation or theorem in Word renumbers the document and its references after **Update Field** (F9 on a selection; Ctrl+A, F9 for the whole document). Every field carries the number LaTeX prints as its cached result, so the document shows the right numbers before any update and in programs that do not update fields.
+
+**Headings (5.1).** One multilevel list (`w:multiLevelType` `multilevel`) has the levels `%1`, `%1.%2` and `%1.%2.%3`, each linked to its style with `w:pStyle`. The styles `heading 1`–`heading 3` carry the list (`w:numPr` in the style), so a heading paragraph has neither number text nor a `w:numPr` of its own, and a paragraph that gets a heading style in Word is numbered at once. A starred heading has `w:numId` 0, which switches the style's numbering off for that paragraph. Levels 4–9 have no number, as in LaTeX's default `secnumdepth`. In documents with `\chapter`, level 1 is the chapter. The list is written only when the document has a numbered heading.
+
+**Captions, equations and theorems (5.2–5.4).** A number is a `SEQ` field, one sequence per LaTeX counter: `Figure`, `Table`, `Equation`, one per theorem counter (`theorem`; `\newtheorem{lemma}[theorem]` shares it) and `Bib` for the bibliography. When LaTeX numbers within a heading level (figures, tables and equations per chapter in documents with `\chapter`; `\newtheorem{x}{X}[section]`; `\numberwithin{equation}{section}`), the number is two fields: the heading number in full context, a full stop, and the sequence restarted at every heading of that level.
+
+```
+Figure {STYLEREF 1 \w}.{SEQ Figure \* ARABIC \s 1}: A plot        → Figure 2.1: A plot
+x = y ({STYLEREF 2 \w}.{SEQ Equation \* ARABIC \s 2})             → (1.2.1)
+Theorem {STYLEREF 1 \w}.{SEQ theorem \* ARABIC \s 1} (Main).      → Theorem 1.1 (Main).
+Remark {SEQ remark \* ARABIC}.                                    → Remark 2.
+[{SEQ Bib \* ARABIC}] D. Knuth. The TeXbook. …                    → [1] D. Knuth. …
+```
+
+This is the pair of fields Word's own Insert ▸ Caption writes with chapter numbering, with the documented `\w` switch (which LibreOffice also understands) in place of Word's `\s`. An unnumbered theorem (`\newtheorem*`) has no field.
+
+**Bookmarks.** The bookmark of a caption, equation, theorem or bibliography entry wraps only its number fields, so a `REF` to it gives exactly what LaTeX's `\ref` prints. A heading's bookmark wraps its text; its number comes from the list.
+
+**Cross-references (5.5).** A `\ref`, `\eqref`, `\autoref` or `\cref` to a numbered heading, figure, table, equation or theorem is a `REF` field:
+
+```
+Section {REF sec_bg \w \h \* CHARFORMAT}     → Section 1.1   (\w: the heading's paragraph number in full context)
+({REF eq_first \h \* CHARFORMAT})            → (2.1)         (the text of the bookmark)
+Figure {REF fig_later \h \* CHARFORMAT}      → Figure 2.1    (\autoref; the name stays text)
+```
+
+`\h` makes the result a link, so Ctrl+click goes to the target. The text that LaTeX adds around the number (`(` `)` for `\eqref`, the name for `\autoref` and `\cref`) stays outside the field. A reference to a list item, a footnote or another label has no Word number to refer to and stays a static internal link. An undefined reference stays `??` with its warning.
+
+**Citations (5.6).** Each number in a `\cite` is a `REF` to its entry's bookmark, so citations follow the bibliography numbers: `[{REF bib_a \h \* CHARFORMAT}, {REF bib_b \h \* CHARFORMAT}, p. 5]`. A missing key stays `?` with its warning.
+
+A field is written as runs: `w:fldChar begin`, `w:instrText` with the code, `w:fldChar separate`, the result, `w:fldChar end`. Word formats an updated `SEQ` or `STYLEREF` result like the first character of the code, so a bold theorem number is bold in every one of these runs. A `REF` result would copy the formatting of the bookmarked text (a reference to a theorem became bold in Word), so `REF` fields have `\* CHARFORMAT`: the result looks like the field code, which has the surrounding text's formatting. No field uses `\* MERGEFORMAT`.
+
+The cached results come from the model, never from the backend. `tests/helpers.py::update` replays Word's rules for `SEQ`, `STYLEREF` and `REF` on a package; the tests check that an update would change nothing, and that inserting or moving content changes the numbers the way Word does.
 
 ## Validation (`backend/check.py`)
 
@@ -175,6 +213,10 @@ Links are never nested: a reference inside the text of another link is written a
   - Ids are unique, and every start has an end that comes after it.
   - Names follow Word's rules (a letter first) and are unique ignoring case.
   - Every internal hyperlink (`w:anchor`) targets an existing bookmark.
+- **Fields.**
+  - Every complex field is balanced: `begin`, an optional `separate`, then `end`, and it has a code.
+  - Every `REF`, `PAGEREF` and `NOTEREF` field, complex or `w:fldSimple`, targets an existing bookmark (ignoring case, as Word does).
+  - A `SEQ` name follows Word's naming rules, and `STYLEREF` names a heading level 1–9 or a quoted style.
 - **Tables.**
   - Every table has a grid, and every row covers exactly the grid's columns (`w:gridSpan` counted).
   - A vertical merge continues only below a merged cell.
@@ -196,3 +238,7 @@ Microsoft Word and LibreOffice were checked on the integration corpus and the st
 | 4.4 | Tables and images | `Table`, `Row`, `Cell` (`w:tbl`, spans, header rows, widths), `Figure`, `Image` (`word/media`, DrawingML inline), captions | Done |
 | 4.5 | Bookmarks and hyperlinks | `Anchor`, `CrossReference`, `Citation`, `Hyperlink`, bookmarks on headings, captions, equations, theorems, bibliography entries, containers; checker extensions | Done |
 | 4.6 | Integration and compatibility | `Theorem`, `Bibliography`, `CodeBlock`, `Quote`, `Container`, equation numbers, footnote texts; integration corpus; Word and LibreOffice checks | Done |
+| 5.1 | Dynamic heading numbering | heading styles linked to one outline list in `numbering.xml` | Done |
+| 5.2–5.4 | Dynamic figure, table, equation and theorem numbers | `SEQ` and `STYLEREF` fields; theorem counters from `\newtheorem` | Done |
+| 5.5 | Dynamic cross-references | `REF` fields; checker for field codes and targets | Done |
+| 5.6 | Bibliography and citations | `.bib` files, `SEQ Bib` entry numbers, `REF` citation numbers | Done |

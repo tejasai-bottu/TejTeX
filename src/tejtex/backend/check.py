@@ -37,6 +37,52 @@ def ids(root, tag, attr):
     return {e.get(W + attr) for e in root.iter(W + tag)} if root is not None else set()
 
 
+def fields(doc, main, marks):
+    out = []
+    codes = []
+    depth = 0
+    code = None
+    for e in doc.iter(W + "fldChar", W + "instrText", W + "fldSimple"):
+        if e.tag == W + "fldSimple":
+            codes.append(e.get(W + "instr") or "")
+        elif e.tag == W + "instrText":
+            if code is not None:
+                code += e.text or ""
+        else:
+            kind = e.get(W + "fldCharType")
+            if kind == "begin":
+                depth += 1
+                code = ""
+            elif kind == "separate" and code is not None:
+                codes.append(code)
+                code = None
+            elif kind == "end":
+                if depth == 0:
+                    out.append(f"{main}: a field ends before it begins")
+                if code is not None:
+                    codes.append(code)
+                    code = None
+                depth = max(depth - 1, 0)
+    if depth:
+        out.append(f"{main}: a field is not closed")
+    for c in codes:
+        words = c.split()
+        if not words:
+            out.append(f"{main}: empty field code")
+            continue
+        kind = words[0].upper()
+        if kind in ("REF", "PAGEREF", "NOTEREF"):
+            if len(words) < 2 or words[1].casefold() not in marks:
+                out.append(f"{main}: field {c.strip()!r} points to a missing bookmark")
+        elif kind == "SEQ":
+            if len(words) < 2 or not BOOKMARK.match(words[1]):
+                out.append(f"{main}: field {c.strip()!r} has an invalid sequence name")
+        elif kind == "STYLEREF":
+            if len(words) < 2 or not (words[1] in [str(i) for i in range(1, 10)] or words[1].startswith('"')):
+                out.append(f"{main}: field {c.strip()!r} has an invalid style")
+    return out
+
+
 def tables(doc, main):
     out = []
     for n, t in enumerate(doc.iter(W + "tbl"), 1):
@@ -187,4 +233,5 @@ def check(data):
     for v in ids(doc, "hyperlink", "anchor") - {None}:
         if v.casefold() not in set(starts.values()):
             out.append(f"{main}: link to missing bookmark {v}")
+    out += fields(doc, main, set(starts.values()))
     return out

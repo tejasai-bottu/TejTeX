@@ -67,6 +67,7 @@ class Level:
     ilvl: int
     fmt: str
     text: str
+    style: str = None
 
 
 @dataclass
@@ -74,6 +75,7 @@ class Abstract:
     id: int
     key: str
     levels: list
+    outline: bool = False
 
 
 @dataclass
@@ -109,6 +111,7 @@ class NumberingEngine:
         self.abstracts = {}
         self.nums = []
         self.labels = {}
+        self.heading = None
 
     def abstract(self, kind, style, delim, shift=0):
         key = f"{kind}:{style}:{delim}:{shift}"
@@ -121,6 +124,17 @@ class NumberingEngine:
         n = Num(len(self.nums) + 1, a.id, level, start)
         self.nums.append(n)
         return n
+
+    def headings(self):
+        if self.heading is None:
+            texts = ["%1", "%1.%2", "%1.%2.%3"]
+            levels = [Level(i, "decimal", t, f"Heading{i + 1}") for i, t in enumerate(texts)]
+            levels += [Level(i, "none", "") for i in range(3, 9)]
+            a = Abstract(len(self.abstracts) + 1, "heading", levels, True)
+            self.abstracts["heading"] = a
+            self.heading = Num(len(self.nums) + 1, a.id, 0, 1)
+            self.nums.append(self.heading)
+        return self.heading
 
     def label(self, text, level):
         if text not in self.labels:

@@ -24,8 +24,10 @@ Tests that need the real Pandoc 3.9 use the `real_pandoc` fixture and are skippe
 | `test_tables.py`, `test_media.py` | Stage 4.4: tables (part 1) and images (part 2) |
 | `test_bookmarks.py`, `test_hyperlinks.py` | Stage 4.5: bookmarks, internal and external links, unsafe targets |
 | `test_full.py`, `test_output.py` | Stage 4.6: the integration corpus; every corpus is a valid package with no content lost; deterministic output; the LaTeX sources stay untouched |
+| `test_fields.py` | Phase 5: heading numbering linked to the heading styles; `SEQ`, `STYLEREF` and `REF` fields with their cached results; theorem counters; renumbering after inserting and moving content; every link and `REF` field has its bookmark |
+| `test_bib.py` | Stage 5.6: the `.bib` reader (decoding, `@string`, comments), name lists, sort orders, entry formats and sentence case; `\bibliography`, `\nocite`, biblatex and missing files through Pandoc |
 
-`tests/helpers.py` builds model documents (`make`) and reads packages back: `paras`, `labels` (replays Word's numbering rules on `numbering.xml` to get the numbers Word shows), `marks` (the text inside each bookmark), `links`, `home` (the paragraph that holds a bookmark), `png` (a small image of a given size).
+`tests/helpers.py` builds model documents (`make`) and reads packages back: `paras`, `labels` (replays Word's numbering rules on `numbering.xml`, including numbering linked to paragraph styles, to get the numbers Word shows), `shown` (each paragraph as Word shows it, number and text), `linked` (styles that carry a list), `marks` (the text inside each bookmark), `links`, `fields` (each field's code and cached result), `update` (replays Word's `SEQ`, `STYLEREF` and `REF` rules to get what Word shows after Update Field), `home` (the paragraph that holds a bookmark), `png` (a small image of a given size).
 
 ## Corpus
 
@@ -40,15 +42,17 @@ Each folder under `tests/data` is a small LaTeX project:
 | `media` | Image sizes, reuse, PDF and missing images, figures |
 | `links` | Bookmark names, forward and backward references, external and unsafe links |
 | `full` | Integration: every Phase 4 feature in one document, including a 60-row table that spans pages and unsupported content |
+| `fields` | Phase 5: a `report` with chapters, `\numberwithin`, five theorem schemes (per chapter, shared, per section, global, starred), forward and backward references, and a `.bib` file with `\nocite` and a missing key |
 
-The expected numbers and references in the tests were checked against `pdflatex`.
+The expected numbers and references in the tests were checked against `pdflatex` (and `bibtex` for `fields`).
 
 ## Checks outside pytest
 
 **LibreOffice.** `scripts/libreoffice_check.py` converts DOCX files to ODT and PDF with LibreOffice and compares, file by file:
 
 - tables, column spans, row spans and header rows;
-- pictures and numbered paragraphs;
+- pictures, numbered paragraphs and numbered headings;
+- `SEQ`, `STYLEREF` and `REF` fields;
 - bookmarks, internal and external links;
 - every word of the text.
 
@@ -73,6 +77,12 @@ The script changes nothing on disk. Word refuses a file with malformed XML, but 
 
 ```
 powershell -ExecutionPolicy Bypass -File scripts\word_check.ps1 -Out word-check.json full.docx
+```
+
+`scripts/word_fields.ps1` is the Phase 5 completion check. It opens a temporary copy of a DOCX file (the `fields` corpus) in a new, hidden Word instance, updates every field and records whether anything changed, then inserts a chapter heading, an equation, a theorem, a figure caption and a section heading (their fields typed the way Word's Insert Caption writes them), updates again and records the heading numbers, every field result, unresolved bookmarks, `Error!` results and references that came out bold.
+
+```
+powershell -ExecutionPolicy Bypass -File scripts\word_fields.ps1 -File fields.docx -Out word-fields.json
 ```
 
 Checked by hand: the repair prompt, the Navigation Pane, Ctrl+click on an external link, the Insert ▸ Bookmark dialog, header rows on later pages, dragging a picture and saving after a caption edit. The checklist is in [phase4-test-report.md](phase4-test-report.md).

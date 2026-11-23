@@ -62,7 +62,7 @@ def test_model_contents(real_pandoc):
     d, rep, _ = model("refs")
     hs = of(d, Heading)
     assert [(h.level, h.number, h.bookmark) for h in hs] == [
-        (1, "1", "ch_intro"), (2, "1.1", "sec_bg"), (3, "1.1.1", "sec_details"), (1, "2", "ch_results")]
+        (1, "1", "ch_intro"), (2, "1.1", "sec_bg"), (3, "1.1.1", "sec_details"), (1, "2", "ch_results"), (1, None, None)]
     assert hs[1].src == "main.tex:16:21"
     fig, = of(d, Figure)
     assert (fig.number, fig.bookmark, fig.src) == ("2.1", "fig_later", "main.tex:35:19")

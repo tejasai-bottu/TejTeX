@@ -28,6 +28,14 @@ def items(o):
     return sum(1 for li in root.iter(TEXT + "list-item") for k in li if k.tag in (TEXT + "p", TEXT + "h"))
 
 
+def heads(d):
+    out = 0
+    for p in re.findall(r"<w:p[ >].*?</w:p>", d):
+        if re.search(r'<w:pStyle w:val="Heading[123]"/>', p) and '<w:numId w:val="0"/>' not in p:
+            out += 1
+    return out
+
+
 def check(soffice, src):
     with tempfile.TemporaryDirectory() as tmp:
         odt = convert(soffice, src, "odt", tmp)
@@ -45,12 +53,16 @@ def check(soffice, src):
         ("row spans", count(d, r'<w:vMerge w:val="restart"/>'), count(o, r"table:number-rows-spanned=")),
         ("tables with header rows", sum(1 for t in d.split("<w:tbl>")[1:] if "<w:tblHeader/>" in t), count(o, r"<table:table-header-rows>")),
         ("pictures", count(d, r"<w:drawing>"), count(o, r"<draw:image ")),
-        ("numbered paragraphs", count(d, r"<w:numPr>"), items(o)),
+        ("numbered paragraphs", count(d, r"<w:numPr>") - count(d, r'<w:numId w:val="0"/>'), items(o)),
+        ("numbered headings", heads(d), count(o, r'<text:h text:style-name="Heading_20_[123]"')),
+        ("sequence fields", count(d, r"<w:instrText[^>]*> SEQ "), count(o, r"<text:sequence ")),
+        ("heading number fields", count(d, r"<w:instrText[^>]*> STYLEREF "), count(o, r"<loext:style-ref ")),
+        ("reference fields", count(d, r"<w:instrText[^>]*> REF "), count(o, r"<text:bookmark-ref ")),
         ("bookmarks", len(marks), len(marks & found)),
         ("internal links", len(inner), sum(1 for x in links if x in marks)),
         ("external links", count(d, r'<w:hyperlink r:id='), count(o, r'xlink:href="(?:https?|ftp|mailto):')),
     ]
-    lost = words(d) - words(o)
+    lost = words(re.sub(r"<w:instrText[^>]*>.*?</w:instrText>", " ", d)) - words(o)
     ok = all(a == b for _, a, b in rows) and not lost and size > 0
     print(f"{src.name}: {'OK' if ok else 'DIFFERENT'} (PDF {size} bytes)")
     for name, a, b in rows:

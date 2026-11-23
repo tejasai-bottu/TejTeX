@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from helpers import W, links, make, part
+from helpers import W, fields, links, make, part
 from tejtex import backend, frontend, ir
 from tejtex.backend.check import check
 from tejtex.config import Config
@@ -84,20 +84,24 @@ def test_links_are_not_nested():
 def test_links_corpus():
     data, rep = corpus("links")
     got = links(data)
-    assert got[:8] == [
-        ("fig_plot", "Figure 1"), ("tab_data", "1"), ("eq_energy", "(1)"), ("thm_main", "1"),
-        ("sec_end", "3"), ("sec_end", "3"), ("sec_end", "3"), ("tab_data", "1"),
+    refs = [f for f in fields(data) if f[0].startswith("REF")]
+    assert refs[:8] == [
+        ("REF fig_plot \\h \\* CHARFORMAT", "1"), ("REF tab_data \\h \\* CHARFORMAT", "1"), ("REF eq_energy \\h \\* CHARFORMAT", "1"), ("REF thm_main \\h \\* CHARFORMAT", "1"),
+        ("REF sec_end \\w \\h \\* CHARFORMAT", "3"), ("REF sec_end \\w \\h \\* CHARFORMAT", "3"), ("REF sec_end \\w \\h \\* CHARFORMAT", "3"), ("REF tab_data \\h \\* CHARFORMAT", "1"),
     ]
-    assert ("sec_start", "back to the start") in got
-    assert got[-7:] == [
-        ("sec_start", "1"), ("sec_a", "2"), ("sec_a_2", "2.1"), ("L1abc", "2.2"),
-        ("sec_a_very_long_label_name_that_goes_bey", "2.3"), ("sec_a_very_long_label_name_that_goes_b_2", "2.4"), ("eq_energy", "Equation 1"),
+    assert refs[8:] == [
+        ("REF sec_start \\w \\h \\* CHARFORMAT", "1"), ("REF sec_a \\w \\h \\* CHARFORMAT", "2"), ("REF sec_a_2 \\w \\h \\* CHARFORMAT", "2.1"), ("REF L1abc \\w \\h \\* CHARFORMAT", "2.2"),
+        ("REF sec_a_very_long_label_name_that_goes_bey \\w \\h \\* CHARFORMAT", "2.3"),
+        ("REF sec_a_very_long_label_name_that_goes_b_2 \\w \\h \\* CHARFORMAT", "2.4"), ("REF eq_energy \\h \\* CHARFORMAT", "1"),
     ]
     rels = {r.get("Id"): r.get("Target") for r in part(data, "word/_rels/document.xml.rels") if r.get("TargetMode") == "External"}
     assert sorted(rels.values()) == ["https://example.com/a?b=1&c=2", "https://example.org/list", "mailto:info@example.com"]
     ext = [(rels[a], t) for a, t in got if a in rels]
     assert ext == [("https://example.org/list", "a list link"), ("https://example.com/a?b=1&c=2", "https://example.com/a?b=1&c=2"), ("mailto:info@example.com", "mail")]
+    assert [x for x in got if x[0] not in rels] == [("sec_start", "back to the start")]
     text = "".join(t.text for t in part(data).iter(W + "t"))
+    assert "Forward to Figure 1, Table\xa01, (1), Theorem\xa01 and Section\xa03." in text
+    assert "and Equation 1." in text
     assert "Undefined: ?? and (??)." in text
     assert "script, file and relative" in text
     bad = sorted((x.element, x.loc) for x in rep.diags if "not allowed" in x.message)
@@ -108,7 +112,11 @@ def test_links_corpus():
 
 def test_refs_corpus_links_forward_and_backward():
     data, rep = corpus("refs")
-    anchors = [a for a, _ in links(data)]
-    assert anchors[:6] == ["fig_later", "tab_later", "eq_second", "thm_main", "it_two", "fig_later"]
-    assert anchors[-7:] == ["sec_bg", "sec_details", "eq_first", "lem_aux", "fn_one", "it_nested", "ch_intro"]
-    assert ("bib_alpha", "[1]") in links(data) and ("bib_beta", "[2, ?]") in links(data)
+    assert [a for a, _ in links(data) if not a.startswith("rTej")] == ["it_two", "fn_one", "it_nested", "ch_intro"]
+    refs = [c.split()[1] for c, _ in fields(data) if c.startswith("REF")]
+    assert refs == [
+        "fig_later", "tab_later", "eq_second", "thm_main", "fig_later", "bib_alpha", "bib_beta",
+        "sec_bg", "sec_details", "eq_first", "lem_aux",
+    ]
+    text = "".join(t.text for t in part(data).iter(W + "t"))
+    assert "Cite [1] and [2, ?]." in text and "Equation\xa0(2.2)" in text

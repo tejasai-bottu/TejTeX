@@ -1,0 +1,71 @@
+\documentclass{report}
+\usepackage{amsmath,amsthm,graphicx,hyperref}
+\newtheorem{theorem}{Theorem}[chapter]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{remark}{Remark}
+\newtheorem*{note}{Note}
+\numberwithin{equation}{section}
+\title{Field Test}
+\begin{document}
+\maketitle
+\chapter{Start}\label{ch:start}
+See Chapter~\ref{ch:end}, Section~\ref{sec:two}, Figure~\ref{fig:one}, Table~\ref{tab:one},
+Equation~\eqref{eq:one}, Theorem~\ref{thm:one}, Lemma~\ref{lem:one}, Definition~\ref{def:one},
+Remark~\ref{rem:one} and \cite{knuth,lamport}.
+\section{One}\label{sec:one}
+\begin{equation}
+a = b \label{eq:one}
+\end{equation}
+\begin{theorem}\label{thm:one}
+First.
+\end{theorem}
+\begin{lemma}\label{lem:one}
+Second.
+\end{lemma}
+\begin{definition}\label{def:one}
+Third.
+\end{definition}
+\begin{remark}\label{rem:one}
+Fourth.
+\end{remark}
+\begin{note}
+Unnumbered.
+\end{note}
+\begin{figure}
+\centering
+\includegraphics[width=2cm]{plot.png}
+\caption{First figure}\label{fig:one}
+\end{figure}
+\section{Two}\label{sec:two}
+\begin{equation}
+c = d \label{eq:two}
+\end{equation}
+\begin{table}
+\centering
+\caption{First table}\label{tab:one}
+\begin{tabular}{ll}
+x & y \\
+\end{tabular}
+\end{table}
+\begin{definition}\label{def:two}
+Fifth.
+\end{definition}
+\chapter{End}\label{ch:end}
+\begin{figure}
+\centering
+\includegraphics[width=2cm]{plot.png}
+\caption{Second figure}\label{fig:two}
+\end{figure}
+\begin{theorem}\label{thm:two}
+Sixth.
+\end{theorem}
+\begin{remark}
+Seventh.
+\end{remark}
+Back to Section~\ref{sec:one}, Equation~\eqref{eq:two}, Figure~\ref{fig:two}, Theorem~\ref{thm:two},
+Definition~\ref{def:two} and \cite[p.~3]{knuth}. Missing: \cite{missing}.
+\nocite{extra}
+\bibliographystyle{plain}
+\bibliography{refs}
+\end{document}

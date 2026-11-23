@@ -1,4 +1,5 @@
 import io
+import re
 import struct
 import zipfile
 import zlib
@@ -7,7 +8,7 @@ from lxml import etree
 
 from tejtex.diag import Report
 from tejtex.ir.context import DocumentContext
-from tejtex.ir.nodes import Bibliography, Document, Hyperlink, Image, List, ListItem, Meta, Placeholder, TextRun, walk
+from tejtex.ir.nodes import Bibliography, Document, Heading, Hyperlink, Image, List, ListItem, Meta, Placeholder, TextRun, walk
 
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
@@ -26,6 +27,8 @@ def make(blocks, meta=None):
             use("PlaceholderChar" if n.inline else "Placeholder")
         if isinstance(n, Bibliography):
             use("Bibliography")
+        if isinstance(n, Heading) and n.number:
+            ctx.numbering.headings()
         if isinstance(n, Hyperlink):
             use("Hyperlink")
         if isinstance(n, Image) and not n.rel:
@@ -108,18 +111,33 @@ def numbering(data):
     return nums
 
 
-def labels(data):
+def linked(data):
+    out = {}
+    for st in part(data, "word/styles.xml").iter(W + "style"):
+        nid = st.find(f"{W}pPr/{W}numPr/{W}numId")
+        if nid is not None:
+            lv = st.find(f"{W}pPr/{W}numPr/{W}ilvl")
+            out[st.get(W + "styleId")] = (nid.get(W + "val"), int(lv.get(W + "val")) if lv is not None else 0)
+    return out
+
+
+def labels(data, root=None):
     nums = numbering(data)
+    styles = linked(data)
     count = {}
     out = []
-    for p in part(data).iter(W + "p"):
+    for p in (part(data) if root is None else root).iter(W + "p"):
         t = "".join(x.text or "" for x in p.iter(W + "t"))
         pr = p.find(f"{W}pPr/{W}numPr")
-        if pr is None:
+        st = p.find(f"{W}pPr/{W}pStyle")
+        nid, lv = styles.get(st.get(W + "val") if st is not None else None, (None, 0))
+        if pr is not None:
+            nid = pr.find(W + "numId").get(W + "val")
+            il = pr.find(W + "ilvl")
+            lv = int(il.get(W + "val")) if il is not None else lv
+        if nid in (None, "0"):
             out.append((None, t))
             continue
-        nid = pr.find(W + "numId").get(W + "val")
-        lv = int(pr.find(W + "ilvl").get(W + "val"))
         levels, starts = nums[nid]
         c = count.setdefault(nid, {})
         c[lv] = c[lv] + 1 if lv in c else starts.get(lv, 1)
@@ -187,3 +205,95 @@ def links(data):
         rid = h.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id")
         out.append((h.get(W + "anchor") or rid, "".join(t.text or "" for t in h.iter(W + "t"))))
     return out
+
+
+def fields(data):
+    out = []
+    code = None
+    result = None
+    for e in part(data).iter(W + "fldChar", W + "instrText", W + "t"):
+        if e.tag == W + "fldChar":
+            kind = e.get(W + "fldCharType")
+            if kind == "begin":
+                code, result = "", None
+            elif kind == "separate":
+                result = ""
+            elif kind == "end":
+                out.append((" ".join(code.split()), result))
+                code = result = None
+        elif e.tag == W + "instrText" and code is not None:
+            code += e.text or ""
+        elif e.tag == W + "t" and result is not None:
+            result += e.text or ""
+    return out
+
+
+def shown(data):
+    return [(f"{a}\t{t}" if a else t) for a, t in labels(data)]
+
+
+def update(data, root=None):
+    root = part(data) if root is None else root
+    nums = [a for a, _ in labels(data, root)]
+    top = {}
+    hist = []
+    seen = {}
+    count = {}
+    vals = []
+    home = {}
+    for p, num in zip(root.iter(W + "p"), nums):
+        st = p.find(f"{W}pPr/{W}pStyle")
+        m = re.fullmatch(r"Heading(\d)", st.get(W + "val") if st is not None else "")
+        if m:
+            top[int(m[1])] = num
+            hist.append(int(m[1]))
+        for b in p.iter(W + "bookmarkStart"):
+            home[b.get(W + "name")] = num
+        code = None
+        for e in p.iter(W + "fldChar", W + "instrText"):
+            if e.tag == W + "instrText":
+                code += e.text or ""
+            elif e.get(W + "fldCharType") == "begin":
+                code = ""
+            elif code is not None:
+                w = code.split()
+                code = None
+                v = None
+                if w[0] == "SEQ":
+                    lv = int(w[w.index("\\s") + 1]) if "\\s" in w else 0
+                    if lv and any(x <= lv for x in hist[seen.get(w[1], 0):]):
+                        count[w[1]] = 0
+                    count[w[1]] = count.get(w[1], 0) + 1
+                    seen[w[1]] = len(hist)
+                    v = str(count[w[1]])
+                elif w[0] == "STYLEREF":
+                    v = top[int(w[1])]
+                vals.append([" ".join(w), v])
+    text = {}
+    ids = {}
+    live = []
+    i = -1
+    inside = False
+    for e in root.iter(W + "bookmarkStart", W + "bookmarkEnd", W + "fldChar", W + "t"):
+        if e.tag == W + "bookmarkStart":
+            ids[e.get(W + "id")] = e.get(W + "name")
+            text[e.get(W + "name")] = ""
+            live.append(e.get(W + "name"))
+        elif e.tag == W + "bookmarkEnd":
+            live.remove(ids[e.get(W + "id")])
+        elif e.tag == W + "fldChar":
+            kind = e.get(W + "fldCharType")
+            if kind == "begin":
+                i += 1
+            inside = kind == "separate"
+            if kind == "end":
+                for n in live:
+                    text[n] += vals[i][1] or ""
+        elif not inside:
+            for n in live:
+                text[n] += e.text or ""
+    for v in vals:
+        w = v[0].split()
+        if w[0] == "REF":
+            v[1] = home[w[1]] if "\\w" in w else text[w[1]]
+    return [tuple(v) for v in vals]

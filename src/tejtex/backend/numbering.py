@@ -20,15 +20,31 @@ def left(level):
 def abstract(aid, a):
     x = el("abstractNum", abstractNumId=aid)
     el("nsid", x, val=f"{0x54540000 + aid:08X}")
-    el("multiLevelType", x, val="hybridMultilevel")
+    el("multiLevelType", x, val="multilevel" if a.outline else "hybridMultilevel")
     for lv in a.levels:
         l = el("lvl", x, ilvl=lv.ilvl)
         el("start", l, val=1)
         el("numFmt", l, val=lv.fmt)
+        if lv.style:
+            el("pStyle", l, val=lv.style)
         el("lvlText", l, val=clean(lv.text))
         el("lvlJc", l, val="left")
-        el("ind", el("pPr", l), left=left(lv.ilvl), hanging=360)
+        if a.outline:
+            el("ind", el("pPr", l), left=0, firstLine=0)
+        else:
+            el("ind", el("pPr", l), left=left(lv.ilvl), hanging=360)
     return x
+
+
+def link(st, eng, ids):
+    if eng.heading is None:
+        return
+    a = next(x for x in eng.abstracts.values() if x.id == eng.heading.abstract)
+    for lv in a.levels:
+        if lv.style in st:
+            pr = st[lv.style].element.get_or_add_pPr().get_or_add_numPr()
+            pr.get_or_add_ilvl().val = lv.ilvl
+            pr.get_or_add_numId().val = ids[eng.heading.id]
 
 
 def build(d, eng):

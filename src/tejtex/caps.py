@@ -7,13 +7,18 @@ LAYOUT = {
     "vfill", "hfill", "vskip", "hskip", "setlength", "addtolength", "setcounter",
     "addtocounter", "pagestyle", "thispagestyle", "pagenumbering", "geometry",
     "linespread", "onehalfspacing", "doublespacing", "singlespacing", "flushbottom",
-    "raggedbottom", "fontsize", "selectfont", "graphicspath", "bibliographystyle",
+    "raggedbottom", "fontsize", "selectfont", "graphicspath",
 }
 RENDER_ENVS = {"tikzpicture", "pgfpicture", "circuitikz", "forest", "pspicture", "tikzcd"}
 RENDER_CMDS = {"tikz"}
-MARK = {"tableofcontents", "listoffigures", "listoftables", "printbibliography"}
-HANDLED = {"maketitle": "title block is built from \\title, \\author and \\date"}
-PARTIAL_ENVS = {"thebibliography": "bibliography kept as plain text; entry keys are kept as anchors"}
+MARK = {"tableofcontents", "listoffigures", "listoftables"}
+HANDLED = {
+    "maketitle": "title block is built from \\title, \\author and \\date",
+    "printbibliography": "bibliography is built from the .bib files at the end of the document",
+    "bibliographystyle": "the style sets the order and the title case of the bibliography",
+    "numberwithin": "numbers restart at the heading level with Word fields",
+}
+PARTIAL_ENVS = {"thebibliography": "entries are numbered with Word fields; their text is kept as written"}
 PACKAGES = {
     "geometry": "page size and margins are not transferred yet",
     "fancyhdr": "headers and footers are not transferred yet",
@@ -56,7 +61,7 @@ def skip(s):
     if name in LAYOUT:
         return el, "unsupported", "info", False, "layout command ignored; Word handles layout"
     if name == "bibitem":
-        return el, "partial", "info", True, "entry key kept as an anchor"
+        return el, "partial", "info", True, "entry key kept as a bookmark"
     if name in MARK or "{" in t:
         return el, "unsupported", "warning", True, "not supported; a placeholder is inserted"
     return el, "unsupported", "warning", False, "not supported; ignored"

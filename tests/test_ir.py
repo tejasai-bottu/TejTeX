@@ -284,17 +284,20 @@ def cite(*keys, suffix=None):
 def test_bibliography_and_citations():
     bib = {"t": "Div", "c": [["", ["thebibliography"], []], [para(anchor("a"), SP, s("First."), {"t": "SoftBreak"}, anchor("b"), SP, s("Second."))]]}
     d, rep = build(doc(para(cite("b"), SP, cite("a", "zz", suffix="p.5")), bib))
-    b2 = d.blocks[1]
+    h, b2 = d.blocks[1:]
+    assert (h.level, h.number, h.inlines[0].text) == (1, None, "References")
     assert isinstance(b2, Bibliography)
+    assert [e.seq.name for e in b2.entries] == ["Bib", "Bib"]
     assert [(e.key, e.number, e.bookmark) for e in b2.entries] == [("a", "1", "bib_a"), ("b", "2", "bib_b")]
     assert ["".join(r.text for r in e.inlines) for e in b2.entries] == ["First.", "Second."]
     cs = nodes(d, Citation)
     assert [c.text for c in cs] == ["[2]", "[1, ?, p.5]"]
     assert cs[1].bookmarks == ["bib_a", None]
+    assert (cs[1].numbers, cs[1].suffix) == (["1", "?"], "p.5")
     assert [x.element for x in rep.diags] == ["\\cite{zz}"]
-    d, rep = build(doc(para(cite("k"))))
+    d, rep = build(doc(para(cite("k"), cite("k"))))
     assert nodes(d, Citation)[0].text == "[k]"
-    assert rep.diags == []
+    assert [(x.element, x.message) for x in rep.diags] == [("\\cite{k}", "no bibliography found; the citation shows its key")]
 
 
 def test_meta():

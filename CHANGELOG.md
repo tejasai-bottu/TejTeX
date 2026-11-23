@@ -2,6 +2,16 @@
 
 All dates are 2026. Version 0.1.0 is not released yet.
 
+## Phase 5 — Advanced document semantics
+
+- **5.1 Headings.** Heading levels 1–3 are numbered by one outline list linked to the `heading 1`–`3` styles, not by number text, so inserted or moved headings renumber. Starred headings switch the numbering off with `numId` 0.
+- **5.2 Figures and tables.** Caption numbers are `SEQ Figure` and `SEQ Table` fields; per-chapter numbers are `{STYLEREF 1 \w}.{SEQ … \s 1}`.
+- **5.3 Equations.** Equation numbers are `SEQ Equation` fields, with `\numberwithin`; bookmarks wrap the number.
+- **5.4 Theorems.** Theorem numbers are counted from the `\newtheorem` lines (shared counters, numbering within a chapter or section, global counters, `\newtheorem*`) instead of Pandoc's numbers, which differed from LaTeX for unshared counters and starred environments; they are `SEQ` fields per counter.
+- **5.5 Cross-references.** References to headings, figures, tables, equations and theorems are `REF` fields (`\w` for headings, `\h` for a link, `\* CHARFORMAT` so they look like the surrounding text). The checker verifies every field code and that every `REF` targets a bookmark.
+- **5.6 Bibliography.** `.bib` files (`\bibliography`, `\addbibresource`, `\nocite`, `\bibliographystyle`) are read by a new BibTeX reader and become a `References`/`Bibliography` section: sorted or in citation order, BibTeX-style formats and sentence case, URLs as links. Entry numbers are `SEQ Bib` fields and citation numbers `REF` fields. Missing keys, files and bibliographies are reported. Word's native citation sources were investigated and not adopted (ADR 0003).
+- Corpus `tests/data/fields` (checked against `pdflatex` and `bibtex`), `tests/test_fields.py`, `tests/test_bib.py`; `scripts/word_fields.ps1` for the insert-and-update check in Word; the LibreOffice check counts fields and numbered headings.
+
 ## Phase 4 — Core DOCX backend (Milestone 1)
 
 ### Stage 4.6 — Integration and compatibility

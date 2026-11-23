@@ -4,7 +4,7 @@ import shutil
 import zipfile
 from pathlib import Path
 
-from helpers import W, labels, links, marks, part, words
+from helpers import W, fields, labels, links, marks, part, words
 from tejtex import backend, frontend, ir
 from tejtex.backend.check import check
 from tejtex.cli import main
@@ -35,9 +35,12 @@ def test_full_document_is_valid(real_pandoc):
 
 def test_headings_lists_and_formatting(real_pandoc):
     data, rep = full()
-    heads = [t for s, t in styles_of(data) if s == "Heading1"]
-    assert heads == ["1\tIntroduction", "2\tLists", "3\tTables", "4\tFigures", "5\tMathematics", "6\tUnsupported content", "7\tResults"]
-    assert [x for x in labels(data) if x[0]] == [
+    heads = [x for (s, _), x in zip(styles_of(data), labels(data)) if s == "Heading1"]
+    assert heads == [
+        ("1", "Introduction"), ("2", "Lists"), ("3", "Tables"), ("4", "Figures"), ("5", "Mathematics"),
+        ("6", "Unsupported content"), ("7", "Results"), (None, "References"),
+    ]
+    assert [x for (s, _), x in zip(styles_of(data), labels(data)) if x[0] and s != "Heading1"] == [
         ("1.", "First step."), ("2.", "Second step with a nested list:"), ("(a)", "Inner step."), ("•", "A bullet inside."),
         ("i.", "Deep step. "), ("(x)", "Custom label."), ("3.", "Third step."), ("(a)", "Restarted list in another format."),
         ("•", "listed"), ("•", "in a cell"),
@@ -80,11 +83,15 @@ def test_captions_bookmarks_and_links(real_pandoc):
         "sec_intro", "sec_lists", "it_deep", "sec_tables", "tab_scores", "sec_figures", "fig_chart", "sec_math",
         "eq_euler", "eq_first", "eq_second", "thm_main", "sec_unsupported", "sec_results", "bib_knuth", "fn_note",
     ]
+    assert [f for f in fields(data) if f[0].startswith("REF")] == [
+        ("REF sec_results \\w \\h \\* CHARFORMAT", "7"), ("REF fig_chart \\h \\* CHARFORMAT", "1"), ("REF tab_scores \\h \\* CHARFORMAT", "1"), ("REF eq_euler \\h \\* CHARFORMAT", "1"),
+        ("REF thm_main \\h \\* CHARFORMAT", "1"), ("REF sec_intro \\w \\h \\* CHARFORMAT", "1"), ("REF sec_lists \\w \\h \\* CHARFORMAT", "2"), ("REF fig_chart \\h \\* CHARFORMAT", "1"),
+        ("REF tab_scores \\h \\* CHARFORMAT", "1"), ("REF eq_first \\h \\* CHARFORMAT", "2"), ("REF eq_second \\h \\* CHARFORMAT", "3"), ("REF thm_main \\h \\* CHARFORMAT", "1"),
+        ("REF bib_knuth \\h \\* CHARFORMAT", "1"),
+    ]
     assert links(data) == [
-        ("sec_results", "7"), ("fig_chart", "Figure 1"), ("tab_scores", "1"), ("eq_euler", "(1)"), ("thm_main", "1"),
-        ("it_deep", "2(a)i"), ("rTej1", "https://example.org/tejtex"), ("rTej2", "CTAN"), ("sec_intro", "1"),
-        ("sec_lists", "2"), ("fig_chart", "1"), ("tab_scores", "1"), ("eq_first", "(2)"), ("eq_second", "(3)"),
-        ("thm_main", "Theorem 1"), ("fn_note", "1"), ("sec_tables", "the tables section"), ("bib_knuth", "[1]"),
+        ("it_deep", "2(a)i"), ("rTej1", "https://example.org/tejtex"), ("rTej2", "CTAN"), ("fn_note", "1"),
+        ("sec_tables", "the tables section"),
     ]
 
 

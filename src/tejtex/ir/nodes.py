@@ -4,6 +4,12 @@ FMT = ("bold", "italic", "underline", "strike", "sup", "sub", "smallcaps", "code
 
 
 @dataclass
+class Seq:
+    name: str
+    within: int = 0
+
+
+@dataclass
 class TextRun:
     text: str
     bold: bool = False
@@ -38,6 +44,8 @@ class Citation:
     bookmarks: list = field(default_factory=list)
     mode: str = "NormalCitation"
     src: str = ""
+    numbers: list = field(default_factory=list)
+    suffix: str = ""
 
 
 @dataclass
@@ -47,6 +55,10 @@ class CrossReference:
     text: str
     bookmark: str = None
     src: str = ""
+    field: str = None
+    number: str = None
+    before: str = ""
+    after: str = ""
 
 
 @dataclass
@@ -149,6 +161,7 @@ class Table:
     src: str = ""
     widths: list = field(default_factory=list)
     name: str = "Table"
+    seq: Seq = None
 
 
 @dataclass
@@ -160,6 +173,7 @@ class Figure:
     label: str = None
     src: str = ""
     name: str = "Figure"
+    seq: Seq = None
 
 
 @dataclass
@@ -172,6 +186,7 @@ class Theorem:
     bookmark: str = None
     label: str = None
     src: str = ""
+    seq: Seq = None
 
 
 @dataclass
@@ -180,6 +195,7 @@ class BibEntry:
     number: str
     inlines: list
     bookmark: str = None
+    seq: Seq = None
 
 
 @dataclass

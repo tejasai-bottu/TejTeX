@@ -2,19 +2,21 @@
 
 TejTeX compiles LaTeX source into native, structurally editable Microsoft Word (DOCX) documents. It maps the semantic structure of the source (headings, paragraphs, lists, tables, figures, captions, references and styles) onto Word's own document structures and leaves layout and pagination to Word.
 
-**Status: Phase 4 (Core DOCX backend, Milestone 1) is complete.** It was checked in Microsoft Word and LibreOffice; see [docs/phase4-test-report.md](docs/phase4-test-report.md).
+**Status: Phase 5 (Advanced document semantics) is complete.** Numbers and references are Word fields that update when content is inserted or moved; see [docs/phase5-test-report.md](docs/phase5-test-report.md). Phase 4 (Core DOCX backend, Milestone 1): [docs/phase4-test-report.md](docs/phase4-test-report.md).
 
 What a compiled document contains:
 
-- **Headings.** Word's built-in heading styles, so the Navigation Pane works.
+- **Headings.** Word's built-in heading styles, so the Navigation Pane works, numbered by Word's own outline numbering (`1`, `1.1`, `1.1.1`), so inserting or moving a heading renumbers the document.
 - **Paragraphs and formatting.** Native paragraphs and character formatting (bold, italic with LaTeX's nested `\emph`, underline, strike-through, small caps, superscript, subscript, code).
 - **Lists.** Native Word numbering: nesting, restarts, LaTeX's label formats and custom `\item[…]` labels. Enter continues a list, and Tab and Shift+Tab change the level.
 - **Tables.** Editable Word tables with merged cells, repeating header rows, alignment, widths and captions.
 - **Images.** Embedded images, each file stored once, sized as in the source.
-- **References.** Bookmarks for every `\label`. `\ref`, `\eqref`, `\autoref`, `\cref`, `\hyperref` and `\cite` are clickable internal links, and `\href`/`\url` are external links (http, https, ftp and mailto only).
+- **Numbers.** Figure, table, equation, theorem and bibliography numbers are Word `SEQ` fields with the numbers LaTeX prints, restarted per chapter or section where LaTeX does.
+- **References.** Bookmarks for every `\label`. `\ref`, `\eqref`, `\autoref` and `\cref` to numbered targets and the numbers in `\cite` are Word `REF` fields: Ctrl+click follows them, and Update Field (F9) renumbers them after edits. Other references and `\hyperref` are internal links, and `\href`/`\url` are external links (http, https, ftp and mailto only).
+- **Bibliography.** `thebibliography`, or `.bib` files with `\bibliography` or biblatex's `\addbibresource`, in the order and format of the BibTeX style; every cited key is checked.
 - **Unsupported content.** TikZ, vector images and unknown commands become visible placeholders, and each one is reported with its file, line and column.
 
-Mathematics (as TeX text), footnotes (at the end) and numbers (static text) are partly supported until Phase 5. [docs/limitations.md](docs/limitations.md) lists what is supported, partial and unsupported.
+Mathematics (as TeX text) and footnotes (at the end of the document) are partly supported. [docs/limitations.md](docs/limitations.md) lists what is supported, partial and unsupported.
 
 How it works:
 
@@ -75,9 +77,9 @@ Every construct Pandoc skips is reported with its file, line and column and one 
 | unsupported | not converted; layout commands are ignored, content is replaced by a visible placeholder | `\vspace`, `\centering`, unknown commands, `geometry` |
 | render | needs rendering as an image (later phase); a visible placeholder for now | TikZ, PDF/EPS/SVG images |
 
-The choice of Pandoc reader mode behind this is recorded in [docs/decisions/0001-pandoc-reader-mode.md](docs/decisions/0001-pandoc-reader-mode.md), the path rule in [docs/decisions/0002-project-root.md](docs/decisions/0002-project-root.md).
+The choice of Pandoc reader mode behind this is recorded in [docs/decisions/0001-pandoc-reader-mode.md](docs/decisions/0001-pandoc-reader-mode.md), the path rule in [docs/decisions/0002-project-root.md](docs/decisions/0002-project-root.md), and the bibliography representation in [docs/decisions/0003-word-citations.md](docs/decisions/0003-word-citations.md).
 
-The document model adds warnings for undefined labels (`\ref{x}` shows `??`), labels defined twice and citation keys missing from the bibliography, each with its file, line and column.
+The document model adds warnings for undefined labels (`\ref{x}` shows `??`), labels defined twice, citation keys missing from the bibliography, unreadable `.bib` files and citations without any bibliography, each with its file, line and column.
 
 ## Exit codes
 
@@ -112,8 +114,8 @@ Tests that need the real Pandoc 3.9 are skipped when it is not on PATH. All othe
 | `caps.py` | Capability registry: support category for each skipped construct |
 | `normalize.py` | Placeholders, image checks, equation labels, Pandoc clean-ups; element classification |
 | `tree.py` | Pandoc AST traversal and validation |
-| `backend/` | DOCX writer: `package.py` (clean package, reproducible ZIP), `writer.py` (routes every model node), `styles.py` (creates the styles the document uses), `numbering.py` (writes the list definitions to `numbering.xml`), `tables.py` (table grid, spans, widths), `media.py` (image parts and sizes), `check.py` (package, relationship, style, numbering, bookmark, link and table checks run on every output) |
-| `ir/` | Document model: `nodes.py` (content tree), `context.py` (styles, numbering, relationships, references, source map), `build.py` (two passes); no python-docx or lxml |
+| `backend/` | DOCX writer: `package.py` (clean package, reproducible ZIP), `writer.py` (routes every model node), `styles.py` (creates the styles the document uses), `numbering.py` (writes the list definitions to `numbering.xml`), `tables.py` (table grid, spans, widths), `media.py` (image parts and sizes), `check.py` (package, relationship, style, numbering, bookmark, link, field and table checks run on every output) |
+| `ir/` | Document model: `nodes.py` (content tree), `context.py` (styles, numbering, relationships, references, source map), `build.py` (two passes), `bib.py` (BibTeX reader and formats); no python-docx or lxml |
 | `diag.py` | Diagnostics and the report |
 | `config.py` | Settings |
 | `errors.py` | Exit codes and the error type |

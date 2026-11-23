@@ -7,6 +7,7 @@ from .errors import Exit, TejtexError
 
 CS = re.compile(r"\\([A-Za-z@]+\*?|.)", re.S)
 ARG = re.compile(r"\s*\{([^{}]*)\}")
+OPTARG = re.compile(r"\s*(?:\[[^\]]*\])?\s*\{([^{}]*)\}")
 SCHEME = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*:")
 VERB = {"verbatim", "verbatim*", "Verbatim", "lstlisting", "minted", "comment"}
 
@@ -49,6 +50,10 @@ class Source:
         self.marks = {}
         self.token = secrets.token_hex(4)
         self.body = None
+        self.bibs = []
+        self.bibstyle = None
+        self.nocite = []
+        self.biblatex = False
         self.text = ""
         self.starts = []
 
@@ -108,6 +113,12 @@ class Source:
                     continue
                 if a and a[1] == "document" and self.body is None:
                     self.body = self.size + i - start
+            if name in ("bibliography", "addbibresource", "bibliographystyle", "nocite"):
+                a = OPTARG.match(text, j)
+                if a:
+                    self.bib(name, a[1], rel, i)
+                    i = a.end()
+                    continue
             if name in ("input", "include"):
                 a = ARG.match(text, j)
                 if a:
@@ -142,6 +153,35 @@ class Source:
         if text is None:
             return self.reject(el, "file cannot be read as UTF-8 text", loc, "error")
         self.expand(text, r, depth + 1, chain + [r])
+
+    def bib(self, cmd, arg, rel, at):
+        line, col = pos(self.texts[rel], at)
+        loc = f"{rel}:{line}:{col}"
+        names = [x.strip() for x in arg.split(",") if x.strip()]
+        if cmd == "bibliographystyle":
+            self.bibstyle = arg.strip()
+            return
+        if cmd == "nocite":
+            self.nocite += names
+            return
+        if cmd == "addbibresource":
+            self.biblatex = True
+        for name in names:
+            el = "\\%s{%s}" % (cmd, name)
+            nm = name if name.endswith(".bib") else name + ".bib"
+            p, why = check(self.root, nm)
+            if why is None and not p.is_file():
+                why = "file not found"
+            text = read(p) if why is None else None
+            if why is None and text is None:
+                why = "file cannot be read as UTF-8 text"
+            if why:
+                self.rep.add("warning", "unsupported", el, "bibliography not read: " + why, loc)
+                continue
+            self.total += len(text)
+            if self.total > self.cfg.size:
+                raise TejtexError(f"the source is larger than {self.cfg.size} characters", Exit.LIMIT)
+            self.bibs.append((p.relative_to(self.root).as_posix(), text, loc))
 
     def reject(self, el, why, loc, level):
         self.rep.add(level, "unsupported", el, "not included: " + why, loc)

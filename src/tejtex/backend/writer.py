@@ -7,11 +7,11 @@ from ..errors import Exit, TejtexError
 from ..ir.nodes import (
     Anchor, BibEntry, Bibliography, Break, Cell, Citation, CodeBlock, Container, CrossReference, Document,
     Figure, Footnote, Heading, Hyperlink, Image, List, ListItem, Math, Meta, Paragraph, Placeholder, Quote,
-    Row, Rule, Table, TextRun, Theorem, block_lines, text, walk,
+    Row, Rule, Seq, Table, TextRun, Theorem, block_lines, text, walk,
 )
 from .check import check
 from .media import Media
-from .numbering import build, left
+from .numbering import build, left, link
 from .package import clean, new, save
 from .styles import ensure
 from .tables import ends_with_table, finish, grid
@@ -28,6 +28,8 @@ class Writer:
         self.d = new(text(m.title), "; ".join(text(a) for a in m.authors))
         self.st = ensure(self.d, doc.ctx.styles)
         self.ids = build(self.d, doc.ctx.numbering)
+        link(self.st, doc.ctx.numbering, self.ids)
+        self.linked = doc.ctx.numbering.heading is not None
         self.media = Media(self.d, doc.ctx.rels.rels)
         for r in doc.ctx.rels.rels:
             if r.kind == "hyperlink":
@@ -56,8 +58,13 @@ class Writer:
                     r.font.bold = True
                 p.add_run(" ")
             elif kind == "thm":
-                k = self.start(p, a.bookmark)
-                p.add_run(a.name + (f" {a.number}" if a.number else "")).bold = True
+                if a.number:
+                    p.add_run(a.name + " ").bold = True
+                    k = self.start(p, a.bookmark)
+                    self.number(p, a.seq, a.number, True)
+                else:
+                    k = self.start(p, a.bookmark)
+                    p.add_run(a.name).bold = True
                 self.end(p, k)
                 if a.title:
                     p.add_run(" (")
@@ -94,6 +101,36 @@ class Writer:
             e = OxmlElement("w:bookmarkEnd")
             e.set(qn("w:id"), str(k))
             p._p.append(e)
+
+    def fld(self, p, tag, bold, kind=None, text=None):
+        e = OxmlElement(tag)
+        if kind:
+            e.set(qn("w:fldCharType"), kind)
+        if text:
+            e.set(qn("xml:space"), "preserve")
+            e.text = text
+        r = p.add_run()
+        r.bold = bold
+        r._r.append(e)
+
+    def field(self, p, code, text, bold=None):
+        self.fld(p, "w:fldChar", bold, "begin")
+        self.fld(p, "w:instrText", bold, text=f" {code} ")
+        self.fld(p, "w:fldChar", bold, "separate")
+        p.add_run(clean(text)).bold = bold
+        self.fld(p, "w:fldChar", bold, "end")
+
+    def number(self, p, seq, text, bold=None):
+        if seq is None:
+            p.add_run(clean(text)).bold = bold
+            return
+        n = text
+        if seq.within and "." in text:
+            pre, _, n = text.rpartition(".")
+            self.field(p, f"STYLEREF {seq.within} \\w", pre, bold)
+            p.add_run(".").bold = bold
+        reset = f" \\s {seq.within}" if seq.within else ""
+        self.field(p, f"SEQ {seq.name} \\* ARABIC{reset}", n, bold)
 
     def link(self, p, items, attr, val, style=None):
         if self.inlink:
@@ -148,10 +185,12 @@ class Writer:
         for i, x in enumerate(b.caption):
             if i == 0 and numbered(b):
                 p = self.para("", x.style)
+                p.add_run(f"{b.name} ")
                 k = self.start(p, b.bookmark)
-                p.add_run(f"{b.name} {b.number}: ")
-                self.inlines(p, x.inlines)
+                self.number(p, b.seq, b.number)
                 self.end(p, k)
+                p.add_run(": ")
+                self.inlines(p, x.inlines)
                 if above:
                     p.paragraph_format.keep_with_next = True
             else:
@@ -208,19 +247,21 @@ class Writer:
     def bibliography(self, b):
         for e in b.entries:
             p = self.para("", "Bibliography")
+            if e.number:
+                p.add_run("[")
             k = self.start(p, e.bookmark)
             if e.number:
-                p.add_run(f"[{e.number}]")
+                self.number(p, e.seq, e.number)
             self.end(p, k)
             if e.number:
-                p.add_run(" ")
+                p.add_run("] ")
             self.inlines(p, e.inlines)
 
     def heading(self, b):
         p = self.para("", b.style)
+        if not b.number and self.linked and b.level <= 3:
+            p._p.get_or_add_pPr().get_or_add_numPr().get_or_add_numId().val = 0
         k = self.start(p, b.bookmark)
-        if b.number:
-            p.add_run(b.number + "\t")
         self.inlines(p, b.inlines)
         self.end(p, k)
 
@@ -269,24 +310,43 @@ class Writer:
 
     def math(self, p, x):
         p.add_run(clean(x.tex.strip()))
-        for num, bm, _ in x.numbers:
-            p.add_run(" ")
+        for num, bm, _, sq in x.numbers:
+            p.add_run(" (")
             k = self.start(p, bm)
-            p.add_run(f"({num})")
+            self.number(p, sq, num)
             self.end(p, k)
+            p.add_run(")")
 
     def xref(self, p, x):
-        if x.bookmark:
+        if x.bookmark and x.field:
+            if x.before:
+                p.add_run(clean(x.before))
+            switch = "\\w \\h" if x.field == "paragraph" else "\\h"
+            self.field(p, f"REF {x.bookmark} {switch} \\* CHARFORMAT", x.number)
+            if x.after:
+                p.add_run(clean(x.after))
+        elif x.bookmark:
             self.link(p, [TextRun(x.text)], "w:anchor", x.bookmark)
         else:
             p.add_run(clean(x.text))
 
     def cite(self, p, x):
-        bm = next((b for b in x.bookmarks if b), None)
-        if bm:
-            self.link(p, [TextRun(x.text)], "w:anchor", bm)
-        else:
-            p.add_run(clean(x.text))
+        if not x.numbers or not any(x.bookmarks):
+            bm = next((b for b in x.bookmarks if b), None)
+            if bm:
+                self.link(p, [TextRun(x.text)], "w:anchor", bm)
+            else:
+                p.add_run(clean(x.text))
+            return
+        p.add_run("[")
+        for i, (num, bm) in enumerate(zip(x.numbers, x.bookmarks)):
+            if i:
+                p.add_run(", ")
+            if bm:
+                self.field(p, f"REF {bm} \\h \\* CHARFORMAT", num)
+            else:
+                p.add_run(clean(num))
+        p.add_run((", " + clean(x.suffix) if x.suffix else "") + "]")
 
     def hyperlink(self, p, x):
         if x.bookmark:
@@ -348,7 +408,7 @@ INLINES = {
     TextRun: Writer.textrun, Break: Writer.brk, Placeholder: Writer.placeholder, Math: Writer.math, Citation: Writer.cite,
     CrossReference: Writer.xref, Hyperlink: Writer.hyperlink, Image: Writer.image, Footnote: None, Anchor: Writer.anchor,
 }
-PARTS = {Document, Meta, ListItem, Row, Cell, BibEntry}
+PARTS = {Document, Meta, ListItem, Row, Cell, BibEntry, Seq}
 
 
 def render(doc):

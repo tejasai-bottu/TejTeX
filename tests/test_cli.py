@@ -1,12 +1,11 @@
 import json
 import subprocess
 import sys
+from pathlib import Path
 
-import docx
 import pytest
-from docx.oxml.ns import qn
-from docx.text.paragraph import Paragraph
 
+from helpers import shown
 from tejtex import __version__
 from tejtex.cli import main
 from tejtex.errors import Exit
@@ -22,8 +21,7 @@ AST = {
 
 
 def texts(path):
-    d = docx.Document(str(path))
-    return [Paragraph(p, d).text for p in d.element.body.iter(qn("w:p"))]
+    return shown(Path(path).read_bytes())
 
 
 def test_version(capsys):

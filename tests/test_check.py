@@ -113,6 +113,38 @@ def test_unsafe_and_mistyped_relationships(tmp_path):
     assert any("points to missing part word/media/image1.png" in p for p in out)
 
 
+def fld(kind):
+    return f'<w:r><w:fldChar w:fldCharType="{kind}"/></w:r>'
+
+
+def code(c):
+    return f'<w:r><w:instrText xml:space="preserve"> {c} </w:instrText></w:r>'
+
+
+def field(c):
+    return fld("begin") + code(c) + fld("separate") + "<w:r><w:t>1</w:t></w:r>" + fld("end")
+
+
+def test_fields_are_balanced_and_point_to_bookmarks():
+    mark = '<w:bookmarkStart w:id="0" w:name="fig_a"/><w:r><w:t>1</w:t></w:r><w:bookmarkEnd w:id="0"/>'
+    ok = (mark + field("SEQ Figure \\* ARABIC \\s 1") + field('STYLEREF "Heading 1" \\s') + field("REF fig_a \\h")
+          + fld("begin") + code("REF FIG_A \\w") + fld("end") + '<w:fldSimple w:instr=" PAGEREF fig_a "/>')
+    assert check(body("<w:p>" + ok + "</w:p>")) == []
+    bad = (field("REF nope \\h") + field("SEQ 1x") + field("STYLEREF 12") + '<w:fldSimple w:instr="NOTEREF gone"/>'
+           + fld("begin") + code("REF") + fld("end") + fld("begin") + fld("separate") + fld("end"))
+    out = check(body("<w:p>" + bad + "</w:p>"))
+    assert [x.split(": ", 1)[1] for x in out] == [
+        "field 'REF nope \\\\h' points to a missing bookmark",
+        "field 'SEQ 1x' has an invalid sequence name",
+        "field 'STYLEREF 12' has an invalid style",
+        "field 'NOTEREF gone' points to a missing bookmark",
+        "field 'REF' points to a missing bookmark",
+        "empty field code",
+    ]
+    out = check(body("<w:p>" + fld("end") + fld("begin") + code("SEQ A") + "</w:p>"))
+    assert [x.split(": ", 1)[1] for x in out] == ["a field ends before it begins", "a field is not closed"]
+
+
 def test_hyperlinks_need_one_target():
     out = check(body('<w:p><w:hyperlink/></w:p>'))
     assert "word/document.xml: a hyperlink needs either r:id or w:anchor" in out
