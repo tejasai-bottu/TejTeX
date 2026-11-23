@@ -12,7 +12,7 @@ doc = ir.build(ast, report, source, config)   # Document(meta, blocks, ctx)
 |---|---|
 | `Para`, `Plain`, `LineBlock` | `Paragraph(style, inlines)` |
 | `Header` | `Heading(level, inlines, style, number, bookmark, label, src)` |
-| `BulletList`, `OrderedList`, `DefinitionList` | `List(kind, items, num, level, start)` with `ListItem(blocks, term)` |
+| `BulletList`, `OrderedList`, `DefinitionList` | `List(kind, items, num, level, start)` with `ListItem(blocks, term, label, num)` — `label` is a custom `\item[...]` label and `num` its numbering instance |
 | `Table` (and the `Div` Pandoc wraps around a labelled table) | `Table(rows, aligns, head, caption, number, bookmark, label, style, src)` with `Row` and `Cell(blocks, align, rowspan, colspan)` |
 | `Figure` | `Figure(blocks, caption, number, bookmark, label, src)` |
 | theorem-like `Div` | `Theorem(kind, name, blocks, number, title, bookmark, label, src)` — Pandoc's static "Theorem 1.1 (Title)." prefix is parsed and removed |
@@ -39,7 +39,7 @@ doc = ir.build(ast, report, source, config)   # Document(meta, blocks, ctx)
 | Component | Holds |
 |---|---|
 | `StyleRegistry` | Semantic paragraph, character and table styles (`BodyText`, `Compact`, `Heading1`–`Heading6` named `heading 1`… so Word's Navigation Pane sees them, `Caption`, `Bibliography`, `FootnoteText`, `Hyperlink`, `TejTeX Placeholder`, …), each with its base style; records which styles the document uses |
-| `NumberingEngine` | One abstract list definition per list kind and format (LaTeX defaults: `1.`, `(a)`, `i.`, `A.`; bullets `•`, `–`, `∗`, `·`) and one numbering instance per list with its nesting level and start value, so every list restarts like LaTeX and nested lists are indented by level |
+| `NumberingEngine` | One abstract list definition per list kind, format and offset (LaTeX defaults: `1.`, `(a)`, `i.`, `A.`; bullets `•`, `–`, `∗`, `·`) and one numbering instance per list with its nesting level and start value, so every list restarts like LaTeX and nested lists are indented by level. Labels follow the depth of each kind, as in LaTeX: an `enumerate` inside an `itemize` is numbered `1.`, not `(a)`, but indented one level deeper. A custom `\item[...]` label gets one instance per label text, with format `none` and the label as its text |
 | `RelationshipManager` | Relationship ids (`rTej1`, …) for images and external hyperlinks; media part names `media/image<n>.<ext>` are generated, never taken from source paths; the same file or URL gets the same relationship |
 | `ReferenceTracker` | Every label and bibliography key with its kind, number, bookmark name and source location; duplicates are reported |
 | `SourceMap` | File, line and column of `\label`, `\ref`-family commands, `\cite`-family commands and image paths, through the Phase 2 source map |
@@ -58,7 +58,7 @@ Numbering rules follow LaTeX:
 - Headings: levels 1–3 are numbered hierarchically (`1`, `1.1`, `1.1.1`), starred headings are not. If the document uses `\chapter`, level 1 is the chapter and figures, tables and equations are numbered per chapter (`2.1`).
 - Equations: `equation`, `align`, `gather`, `multline`, `flalign`, `alignat`, `eqnarray` are numbered unless starred; multi-row environments get one number per row, split at top-level `\\`; `\nonumber`/`\notag` skip a row; `\tag{x}` sets the number without counting.
 - Theorems: the number Pandoc writes (it knows shared counters such as `\newtheorem{lemma}[theorem]`).
-- List items: `\label` in an `enumerate` item refers to the item (`2`, `2a`, `2(a)iii`, as LaTeX prints them); in a footnote to the footnote; elsewhere to the current section.
+- List items: `\label` in an `enumerate` item refers to the item as LaTeX prints it: `2`, `2a`, `2(a)iii`. With an explicit format the counter is written in that format (`[(a)]` with the enumerate package gives `a`); when the document loads enumitem the reference is the whole label (`(a)`, `C.`), which is enumitem's default. A custom `\item[x]` does not step the counter, and a `\label` after it refers to the previous item. In a footnote `\label` refers to the footnote; elsewhere to the current section.
 - Bibliography: entries are numbered in order; citations read `[1]`, `[1, 2, p. 5]`; without a `thebibliography` the key is shown (`[knuth84]`) until Phase 5 reads `.bib` files.
 
 ## Limits

@@ -39,6 +39,13 @@ Default mode, with the JSON log as a second output, and a marker pass for conten
 
 `raw_tex` mode is not used: it loses resolved references, labels on theorems and the structure of unknown environments and bibliographies, which matter more than the positions it keeps.
 
+## Additions
+
+Stage 4.3 (lists):
+
+- Pandoc drops the optional argument of `\item` in `itemize` and `enumerate` without reporting it. TejTeX finds `\item[...]` in those environments (not in `description`, not in comments) and rewrites it to `\item \href{tejtex-<token>:<n>}{...}`. The label reaches the model as a `Span` with class `tejtex-item`.
+- enumitem options on `enumerate`, which Pandoc skips, are translated when they map onto Pandoc's own markers: `label=` with one counter (`\arabic*`, `\alph*`, `\Alph*`, `\roman*`, `\Roman*`) followed by `.` or `)` or inside `(…)`, and `start=`. Spacing options are ignored with an info diagnostic. Anything else stays a `partial` warning; `resume` is reported as not applied.
+
 ## Consequences
 
 - Pandoc runs twice when the document contains markable constructs.

@@ -58,10 +58,10 @@ class Source:
             self.parts.append(s)
             self.size += len(s)
 
-    def mark(self, info):
+    def mark(self, info, body=""):
         n = len(self.marks) + 1
         self.marks[n] = info
-        return "\\href{tejtex-%s:%d}{}" % (self.token, n)
+        return "\\href{tejtex-%s:%d}{%s}" % (self.token, n, body)
 
     def where(self, off):
         i = bisect_right(self.starts, off) - 1

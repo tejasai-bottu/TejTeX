@@ -35,7 +35,7 @@ def test_sec63_diagnostics(real_pandoc):
     got = sorted((d.element, d.category) for d in rep.diags)
     assert got == sorted([
         ("package geometry", "unsupported"),
-        ("[label=(\\roman*)]", "partial"),
+        ("[label=(\\roman*)]", "supported"),
         ("\\vspace", "unsupported"),
         ("\\centering", "unsupported"),
         ("\\centering", "unsupported"),

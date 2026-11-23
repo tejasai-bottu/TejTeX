@@ -110,6 +110,8 @@ class Heading:
 class ListItem:
     blocks: list
     term: list = field(default_factory=list)
+    label: str = None
+    num: int = None
 
 
 @dataclass
@@ -317,6 +319,8 @@ def block_lines(block):
             for it in b.items:
                 if it.term:
                     items.append(Paragraph("Compact", it.term))
+                if it.label:
+                    items.append(Paragraph("Compact", [TextRun(it.label)]))
                 items += it.blocks
             stack.extend(reversed(items))
         elif isinstance(b, (Quote, Container)):

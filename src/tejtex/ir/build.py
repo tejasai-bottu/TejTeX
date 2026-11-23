@@ -4,7 +4,7 @@ from pathlib import Path
 from .. import tree
 from ..errors import Exit, TejtexError
 from ..normalize import EXTS
-from .context import DocumentContext
+from .context import DELIMS, FORMATS, DocumentContext, counter
 from .nodes import (
     Anchor, BibEntry, Bibliography, Break, Cell, Citation, CodeBlock, Container, CrossReference,
     Document, Figure, Footnote, Heading, Hyperlink, Image, List, ListItem, Math, Meta, Paragraph,
@@ -16,6 +16,7 @@ LABEL = re.compile(r"\\label\s*\{([^}]*)\}")
 TAG = re.compile(r"\\tag\*?\s*\{([^}]*)\}")
 NONUM = re.compile(r"\\(?:nonumber|notag)(?![A-Za-z])")
 THM = re.compile(r"(.+?)\s+(\d[\w.]*)$")
+ENUMITEM = re.compile(r"\\usepackage\s*(?:\[[^\]]*\])?\s*\{[^}]*\benumitem\b")
 NUMBERED = {"equation", "align", "gather", "multline", "flalign", "alignat", "eqnarray"}
 ROWS = {"align", "gather", "flalign", "alignat", "eqnarray"}
 PLAIN_DIVS = {"center", "flushleft", "flushright", "minipage", "thebibliography"}
@@ -43,9 +44,17 @@ def alpha(n):
     return chr(96 + n) if 1 <= n <= 26 else str(n)
 
 
+COUNTERS = {
+    "decimal": str, "lowerLetter": alpha, "upperLetter": lambda n: alpha(n).upper(),
+    "lowerRoman": roman, "upperRoman": lambda n: roman(n).upper(),
+}
+
+
 def item_ref(nums):
-    f = [str, alpha, roman, lambda n: alpha(n).upper()]
-    s = [f[k](n) for k, n in enumerate(nums[:4])]
+    n, f, pat = nums[-1]
+    if pat:
+        return pat.format(COUNTERS[f](n))
+    s = [COUNTERS[f](n) for n, f, _ in nums[:4]]
     if len(s) < 3:
         return "".join(s)
     return s[0] + "(" + s[1] + ")" + "".join(s[2:])
@@ -66,6 +75,14 @@ def plain(inls):
         elif t in ("Code", "Math"):
             out.append(c[1])
     return "".join(out)
+
+
+def custom(it):
+    if it and it[0].get("t") in ("Para", "Plain"):
+        c = it[0]["c"]
+        if c and c[0].get("t") == "Span" and "tejtex-item" in c[0]["c"][0][1]:
+            return c[0]
+    return None
 
 
 def plain_blocks(blocks):
@@ -154,9 +171,11 @@ class Builder:
         self.cfg = cfg
         self.ctx = DocumentContext(rep, src)
         self.info = {}
+        self.labels = {}
         self.count = 0
         self.sec = [0] * 6
         self.chapters = src is not None and "\\chapter" in src.text
+        self.enumitem = src is not None and ENUMITEM.search(src.text) is not None
         self.fig = self.tab = self.eq = self.notes = self.bibn = 0
         self.current = None
         self.root = Path(src.root).resolve() if src is not None else None
@@ -195,7 +214,7 @@ class Builder:
         elif t == "Note":
             self.notes += 1
             self.info[id(n)] = str(self.notes)
-            path = path + [("note", str(self.notes))]
+            path = path + [("note", str(self.notes), None)]
         elif t == "Image":
             self.image1(n)
         elif t == "Link":
@@ -259,7 +278,7 @@ class Builder:
 
     def here(self, path):
         for i in range(len(path) - 1, -1, -1):
-            kind, v = path[i]
+            kind, v, _ = path[i]
             if kind == "note":
                 return v
             if kind == "list" and v is not None:
@@ -321,23 +340,39 @@ class Builder:
         t, c = n["t"], n["c"]
         lv = sum(1 for p in path if p[0] == "list")
         if t == "DefinitionList":
+            self.info[id(n)] = lv
             for term, defs in c:
                 for x in term:
                     self.visit(x, d + 1, path)
                 for blocks in defs:
                     for x in blocks:
-                        self.visit(x, d + 1, path + [("list", None)])
+                        self.visit(x, d + 1, path + [("list", None, "description")])
             return
-        if t == "BulletList":
-            self.info[id(n)] = self.ctx.numbering.new("bullet", None, None, 1, lv)
-            items = [(it, None) for it in c]
+        kind = "bullet" if t == "BulletList" else "ordered"
+        dep = sum(1 for p in path if p[0] == "list" and p[2] == kind)
+        if kind == "bullet":
+            self.info[id(n)] = self.ctx.numbering.new("bullet", None, None, 1, lv, dep)
+            start, fmt, pat, items = 1, None, None, c
         else:
             start, style, delim = c[0][0], c[0][1]["t"], c[0][2]["t"]
-            self.info[id(n)] = self.ctx.numbering.new("ordered", style, delim, start, lv)
-            items = [(it, start + i) for i, it in enumerate(c[1])]
-        for it, k in items:
+            self.info[id(n)] = self.ctx.numbering.new("ordered", style, delim, start, lv, dep)
+            fmt, items = counter(style, dep), c[1]
+            pat = DELIMS.get(delim, "{}.") if self.enumitem and style in FORMATS else None
+        k = start - 1
+        last = None
+        for it in items:
+            lab = custom(it)
+            if lab:
+                s = plain(lab["c"][1]).strip()
+                self.labels[id(it)] = (s, self.ctx.numbering.label(s, lv))
+                v = last
+            elif fmt:
+                k += 1
+                v = last = (k, fmt, pat)
+            else:
+                v = None
             for x in it:
-                self.visit(x, d + 1, path + [("list", k)])
+                self.visit(x, d + 1, path + [("list", v, kind)])
 
     def blocks(self, lst, d, style):
         out = []
@@ -365,16 +400,23 @@ class Builder:
         if t == "BlockQuote":
             return [Quote(self.blocks(c, d + 1, "BlockText"))]
         if t in ("BulletList", "OrderedList"):
+            self.use("Compact")
             num = self.info[id(n)]
-            items = c if t == "BulletList" else c[1]
             kind = "bullet" if t == "BulletList" else "ordered"
-            return [List(kind, [ListItem(self.blocks(it, d + 1, "Compact")) for it in items], num.id, num.level, num.start)]
+            items = []
+            for it in (c if t == "BulletList" else c[1]):
+                lab, ln = self.labels.get(id(it), (None, None))
+                if lab is not None:
+                    it = self.unlabel(it)
+                items.append(ListItem(self.blocks(it, d + 1, "Compact"), [], lab, ln.id if ln else None))
+            return [List(kind, items, num.id, num.level, num.start)]
         if t == "DefinitionList":
+            self.use("Compact")
             items = []
             for term, defs in c:
                 body = [b for blocks in defs for b in blocks]
                 items.append(ListItem(self.blocks(body, d + 1, "Compact"), self.inl(term, d + 1)))
-            return [List("description", items)]
+            return [List("description", items, None, self.info[id(n)])]
         if t == "Header":
             level, a, inls = c
             num, tg = self.info.get(id(n), (None, None))
@@ -392,6 +434,13 @@ class Builder:
         if t == "Div":
             return self.div(n, d, style)
         return []
+
+    def unlabel(self, it):
+        c = it[0]["c"]
+        del c[0]
+        while c and c[0].get("t") in ("Space", "SoftBreak"):
+            del c[0]
+        return it if c else it[1:]
 
     def table(self, n, d):
         a, cap, specs, head, bodies, foot = n["c"]

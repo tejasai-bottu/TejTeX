@@ -1,4 +1,5 @@
 import io
+import re
 import zipfile
 
 import docx
@@ -12,6 +13,11 @@ APP = (
 )
 TERMS = "{http://purl.org/dc/terms/}"
 STAMP = (1980, 1, 1, 0, 0, 0)
+BAD = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff\ufffe\uffff]")
+
+
+def clean(s):
+    return BAD.sub("", s)
 
 
 def new(title="", authors=""):

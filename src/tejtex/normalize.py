@@ -6,6 +6,7 @@ from .source import check
 LABEL = re.compile(r"\\label\s*\{([^}]*)\}")
 EXTS = ["", ".png", ".jpg", ".jpeg", ".pdf", ".eps", ".svg"]
 MARKS = {"tejtex-placeholder", "tejtex-anchor"}
+ITEM = "tejtex-item"
 
 
 def words(s):
@@ -49,7 +50,7 @@ def alone(n, s):
     items = [x for x in n["c"] if x.get("t") not in ("Space", "SoftBreak")]
     if len(items) == 1:
         info = mark(items[0], s)
-        if info and not info.get("anchor"):
+        if info and not info.get("anchor") and not info.get("item"):
             return info
     return None
 
@@ -82,6 +83,8 @@ def name(n, partial):
     t = n.get("t")
     if t in ("Div", "Span"):
         a = n["c"][0]
+        if ITEM in a[1]:
+            return "\\item[]", "supported"
         if MARKS & set(a[1]):
             d = dict(a[2])
             return d["element"], d["category"]
@@ -102,7 +105,9 @@ def run(ast, s, rep):
                 n = lst[i] = div(info)
         elif t == "Link":
             info = mark(n, s)
-            if info:
+            if info and info.get("item"):
+                n = lst[i] = {"t": "Span", "c": [["", [ITEM], []], n["c"][1]]}
+            elif info:
                 n = lst[i] = span(info)
         elif t == "Image":
             n = lst[i] = image(n, s, rep)

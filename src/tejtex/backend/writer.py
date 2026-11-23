@@ -1,4 +1,4 @@
-import re
+from docx.shared import Twips
 
 from ..errors import Exit, TejtexError
 from ..ir.nodes import (
@@ -7,14 +7,9 @@ from ..ir.nodes import (
     Row, Rule, Table, TextRun, Theorem, block_lines, note_lines, text,
 )
 from .check import check
-from .package import new, save
+from .numbering import build, left
+from .package import clean, new, save
 from .styles import ensure
-
-BAD = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff￾￿]")
-
-
-def clean(s):
-    return BAD.sub("", s)
 
 
 def inner(b):
@@ -24,13 +19,6 @@ def inner(b):
         return b.blocks + b.caption
     if isinstance(b, Table):
         return b.caption + [x for r in b.rows for c in r.cells for x in c.blocks]
-    if isinstance(b, List):
-        out = []
-        for it in b.items:
-            if it.term:
-                out.append(Paragraph("Compact", it.term))
-            out += it.blocks
-        return out
     return None
 
 
@@ -40,9 +28,32 @@ class Writer:
         m = doc.meta
         self.d = new(text(m.title), "; ".join(text(a) for a in m.authors))
         self.st = ensure(self.d, doc.ctx.styles)
+        self.ids = build(self.d, doc.ctx.numbering)
+        self.pending = None
+        self.indent = None
 
-    def para(self, s, style=None):
-        return self.d.add_paragraph(clean(s), style=self.st[style] if style else None)
+    def para(self, s="", style=None):
+        p = self.d.add_paragraph(style=self.st[style] if style else None)
+        f = p.paragraph_format
+        if self.pending:
+            kind, a, b = self.pending
+            self.pending = None
+            if kind == "num":
+                pr = p._p.get_or_add_pPr().get_or_add_numPr()
+                pr.get_or_add_ilvl().val = b
+                pr.get_or_add_numId().val = a
+            else:
+                f.left_indent = Twips(left(b))
+                f.first_line_indent = Twips(-720)
+                self.inlines(p, a)
+                for r in p.runs:
+                    r.font.bold = True
+                p.add_run(" ")
+        elif self.indent:
+            f.left_indent = Twips(self.indent)
+        if s:
+            p.add_run(clean(s))
+        return p
 
     def block(self, b):
         if type(b) not in BLOCKS:
@@ -67,6 +78,22 @@ class Writer:
     def paragraph(self, b):
         p = self.para("", b.style)
         self.inlines(p, b.inlines)
+
+    def items(self, b):
+        if self.pending:
+            self.para("", "Compact")
+        old = self.indent
+        for it in b.items:
+            if b.kind == "description":
+                self.pending = ("term", it.term, b.level)
+            else:
+                self.pending = ("num", self.ids[it.num or b.num], b.level)
+            self.indent = left(b.level)
+            for x in it.blocks:
+                self.block(x)
+            if self.pending:
+                self.para("", "Compact")
+        self.indent = old
 
     def heading(self, b):
         p = self.para("", b.style)
@@ -141,7 +168,7 @@ class Writer:
 
 
 BLOCKS = {
-    Paragraph: Writer.paragraph, Heading: Writer.heading, List: None, Table: None, Figure: None, Theorem: None,
+    Paragraph: Writer.paragraph, Heading: Writer.heading, List: Writer.items, Table: None, Figure: None, Theorem: None,
     Bibliography: None, Quote: None, Container: None, CodeBlock: None, Rule: None, Placeholder: Writer.notice,
 }
 INLINES = {

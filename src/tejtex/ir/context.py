@@ -82,35 +82,51 @@ class Num:
     start: int
 
 
-def levels(kind, style, delim):
+def levels(kind, style, delim, shift=0):
     out = []
     for i in range(9):
+        k = max(i - shift, 0)
         if kind == "bullet":
-            out.append(Level(i, "bullet", BULLETS[i % 4]))
+            out.append(Level(i, "bullet", BULLETS[k % 4]))
+        elif kind == "label":
+            out.append(Level(i, "none", style))
         elif style in FORMATS:
             out.append(Level(i, FORMATS[style], DELIMS.get(delim, "{}.").format(f"%{i + 1}")))
         else:
-            fmt, pat = LATEX[i % 4]
+            fmt, pat = LATEX[k % 4]
             out.append(Level(i, fmt, pat.replace("%1", f"%{i + 1}")))
     return out
+
+
+def counter(style, depth):
+    return FORMATS.get(style) or LATEX[depth % 4][0]
 
 
 class NumberingEngine:
     def __init__(self):
         self.abstracts = {}
         self.nums = []
+        self.labels = {}
 
-    def abstract(self, kind, style, delim):
-        key = f"{kind}:{style}:{delim}"
+    def abstract(self, kind, style, delim, shift=0):
+        key = f"{kind}:{style}:{delim}:{shift}"
         if key not in self.abstracts:
-            self.abstracts[key] = Abstract(len(self.abstracts) + 1, key, levels(kind, style, delim))
+            self.abstracts[key] = Abstract(len(self.abstracts) + 1, key, levels(kind, style, delim, shift))
         return self.abstracts[key]
 
-    def new(self, kind, style, delim, start, level):
-        a = self.abstract(kind, style, delim)
+    def new(self, kind, style, delim, start, level, depth=None):
+        a = self.abstract(kind, style, delim, level - depth if depth is not None else 0)
         n = Num(len(self.nums) + 1, a.id, level, start)
         self.nums.append(n)
         return n
+
+    def label(self, text, level):
+        if text not in self.labels:
+            a = self.abstract("label", text, None)
+            n = Num(len(self.nums) + 1, a.id, level, 1)
+            self.nums.append(n)
+            self.labels[text] = n
+        return self.labels[text]
 
 
 @dataclass

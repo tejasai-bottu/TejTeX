@@ -5,7 +5,7 @@ from lxml import etree
 
 from tejtex.diag import Report
 from tejtex.ir.context import DocumentContext
-from tejtex.ir.nodes import Document, Meta, Placeholder, TextRun, walk
+from tejtex.ir.nodes import Document, List, ListItem, Meta, Placeholder, TextRun, walk
 
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
@@ -22,6 +22,12 @@ def make(blocks, meta=None):
             use("VerbatimChar")
         if isinstance(n, Placeholder):
             use("PlaceholderChar" if n.inline else "Placeholder")
+        if isinstance(n, List):
+            use("Compact")
+            if n.kind != "description":
+                n.num = ctx.numbering.new(n.kind, "DefaultStyle", "DefaultDelim", n.start, n.level).id
+        if isinstance(n, ListItem) and n.label is not None:
+            n.num = ctx.numbering.label(n.label, 0).id
     m = d.meta
     for sid, v in (("Title", m.title), ("Author", m.authors), ("Date", m.date)):
         if v:
@@ -61,3 +67,60 @@ def style(data, sid):
         if s.get(W + "styleId") == sid:
             return s
     return None
+
+
+def roman(n):
+    out = ""
+    for v, s in [(1000, "m"), (900, "cm"), (500, "d"), (400, "cd"), (100, "c"), (90, "xc"),
+                 (50, "l"), (40, "xl"), (10, "x"), (9, "ix"), (5, "v"), (4, "iv"), (1, "i")]:
+        while n >= v:
+            out += s
+            n -= v
+    return out
+
+
+SHOW = {
+    "decimal": str, "lowerLetter": lambda n: chr(96 + n), "upperLetter": lambda n: chr(64 + n),
+    "lowerRoman": roman, "upperRoman": lambda n: roman(n).upper(),
+}
+
+
+def numbering(data):
+    root = part(data, "word/numbering.xml")
+    absts = {}
+    for a in root.findall(W + "abstractNum"):
+        lv = {}
+        for x in a.findall(W + "lvl"):
+            lv[int(x.get(W + "ilvl"))] = (x.find(W + "numFmt").get(W + "val"), x.find(W + "lvlText").get(W + "val"))
+        absts[a.get(W + "abstractNumId")] = lv
+    nums = {}
+    for n in root.findall(W + "num"):
+        starts = {int(o.get(W + "ilvl")): int(o.find(W + "startOverride").get(W + "val")) for o in n.findall(W + "lvlOverride")}
+        nums[n.get(W + "numId")] = (absts[n.find(W + "abstractNumId").get(W + "val")], starts)
+    return nums
+
+
+def labels(data):
+    nums = numbering(data)
+    count = {}
+    out = []
+    for p in part(data).iter(W + "p"):
+        t = "".join(x.text or "" for x in p.iter(W + "t"))
+        pr = p.find(f"{W}pPr/{W}numPr")
+        if pr is None:
+            out.append((None, t))
+            continue
+        nid = pr.find(W + "numId").get(W + "val")
+        lv = int(pr.find(W + "ilvl").get(W + "val"))
+        levels, starts = nums[nid]
+        c = count.setdefault(nid, {})
+        c[lv] = c[lv] + 1 if lv in c else starts.get(lv, 1)
+        for k in [k for k in c if k > lv]:
+            del c[k]
+        label = levels[lv][1]
+        for k in range(lv + 1):
+            fmt = levels[k][0]
+            if fmt in SHOW:
+                label = label.replace(f"%{k + 1}", SHOW[fmt](c.get(k, 1)))
+        out.append((label, t))
+    return out

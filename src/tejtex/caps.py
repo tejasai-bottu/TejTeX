@@ -35,6 +35,8 @@ ENV = re.compile(r"\\(begin|end)\s*\{([^}]*)\}")
 def skip(s):
     t = s.strip()
     if t.startswith("["):
+        if "resume" in t:
+            return t, "partial", "warning", False, "resume is not supported; the list restarts its numbering"
         return t, "partial", "warning", False, "option ignored; the formatting it sets is lost"
     m = ENV.match(t)
     if m:

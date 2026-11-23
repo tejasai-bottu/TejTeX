@@ -145,10 +145,31 @@ def test_numbering_engine():
     assert [n.id for n in (a, b, c, d)] == [1, 2, 3, 4]
     assert b.abstract == c.abstract
     assert (c.level, c.start) == (1, 3)
-    levels = e.abstracts["ordered:DefaultStyle:DefaultDelim"].levels
+    levels = e.abstracts["ordered:DefaultStyle:DefaultDelim:0"].levels
     assert [(x.fmt, x.text) for x in levels[:4]] == [("decimal", "%1."), ("lowerLetter", "(%2)"), ("lowerRoman", "%3."), ("upperLetter", "%4.")]
-    assert e.abstracts["bullet:None:None"].levels[1].text == "–"
-    assert e.abstracts["ordered:LowerRoman:OneParen"].levels[0].text == "%1)"
+    assert e.abstracts["bullet:None:None:0"].levels[1].text == "–"
+    assert e.abstracts["ordered:LowerRoman:OneParen:0"].levels[0].text == "%1)"
+
+
+def test_numbering_follows_the_depth_of_each_list_kind():
+    e = NumberingEngine()
+    a = e.new("ordered", "DefaultStyle", "DefaultDelim", 1, 1, 0)
+    b = e.new("bullet", None, None, 1, 2, 0)
+    c = e.new("ordered", "DefaultStyle", "DefaultDelim", 1, 0, 0)
+    assert a.abstract != c.abstract
+    levels = e.abstracts["ordered:DefaultStyle:DefaultDelim:1"].levels
+    assert [(x.fmt, x.text) for x in levels[:3]] == [("decimal", "%1."), ("decimal", "%2."), ("lowerLetter", "(%3)")]
+    assert [x.text for x in e.abstracts["bullet:None:None:2"].levels[:4]] == ["•", "•", "•", "–"]
+    assert b.level == 2
+
+
+def test_custom_labels_share_one_numbering_per_text():
+    e = NumberingEngine()
+    a = e.label("(x)", 0)
+    assert e.label("(x)", 2) is a
+    b = e.label("--", 1)
+    assert a.id != b.id
+    assert {(x.fmt, x.text) for x in e.abstracts["label:(x):None:0"].levels} == {("none", "(x)")}
 
 
 def test_relationships():
@@ -190,10 +211,15 @@ def test_equation_numbering():
 
 
 def test_item_refs():
-    assert item_ref([2]) == "2"
-    assert item_ref([1, 2]) == "1b"
-    assert item_ref([1, 2, 3]) == "1(b)iii"
-    assert item_ref([1, 1, 1, 1]) == "1(a)iA"
+    d, a, r, A = "decimal", "lowerLetter", "lowerRoman", "upperLetter"
+    assert item_ref([(2, d, None)]) == "2"
+    assert item_ref([(1, d, None), (2, a, None)]) == "1b"
+    assert item_ref([(1, d, None), (2, a, None), (3, r, None)]) == "1(b)iii"
+    assert item_ref([(1, d, None), (1, a, None), (1, r, None), (1, A, None)]) == "1(a)iA"
+    assert item_ref([(1, A, None), (1, r, None)]) == "Ai"
+    assert item_ref([(3, A, "{}.")]) == "C."
+    assert item_ref([(3, A, "{}."), (1, r, "({})")]) == "(i)"
+    assert item_ref([(14, "upperRoman", None)]) == "XIV"
 
 
 def test_sections_and_chapters():
@@ -302,6 +328,41 @@ def test_lists_get_their_own_numbering():
     ls = nodes(d, List)
     assert [(x.kind, x.num, x.level, x.start) for x in ls] == [("bullet", 1, 0, 1), ("ordered", 2, 1, 1), ("ordered", 3, 0, 4)]
     assert ls[0].items[0].blocks[0].style == "Compact"
+
+
+def item(text):
+    return {"t": "Span", "c": [["", ["tejtex-item"], []], [s(text)]]}
+
+
+def test_custom_item_labels_do_not_step_the_counter():
+    target = {"t": "Span", "c": [["c", [], [["label", "c"]]], []]}
+    ol = {"t": "OrderedList", "c": [[1, {"t": "DefaultStyle"}, {"t": "DefaultDelim"}], [
+        [para(s("a"))],
+        [para(item("(x)"), SP, s("b"))],
+        [para(s("c"), SP, target)],
+        [para(item("--"))],
+    ]]}
+    d, rep = build(doc(ol, para(ref("c"))))
+    lst = nodes(d, List)[0]
+    assert [x.label for x in lst.items] == [None, "(x)", None, "--"]
+    assert lst.items[1].blocks[0].inlines[0].text == "b"
+    assert lst.items[3].blocks == []
+    nums = d.ctx.numbering
+    assert lst.items[1].num != lst.items[3].num and lst.items[0].num is None
+    assert nums.abstracts["label:(x):None:0"].levels[0].fmt == "none"
+    assert nodes(d, CrossReference)[0].text == "2"
+
+
+def test_list_levels_and_description_lists():
+    inner = {"t": "OrderedList", "c": [[1, {"t": "DefaultStyle"}, {"t": "DefaultDelim"}], [[para(s("i"))]]]}
+    dl = {"t": "DefinitionList", "c": [[[s("T")], [[para(s("d")), inner]]]]}
+    outer = {"t": "BulletList", "c": [[para(s("o")), dl]]}
+    d, rep = build(doc(outer))
+    ls = nodes(d, List)
+    assert [(x.kind, x.level) for x in ls] == [("bullet", 0), ("description", 1), ("ordered", 2)]
+    a = d.ctx.numbering.nums[ls[2].num - 1].abstract
+    levels = next(x for x in d.ctx.numbering.abstracts.values() if x.id == a).levels
+    assert (levels[2].fmt, levels[2].text) == ("decimal", "%3.")
 
 
 def test_limits():

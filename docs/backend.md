@@ -6,7 +6,7 @@ Phase 4. Package `tejtex.backend`. It writes the document model (`tejtex.ir`, se
 
 The backend does not decide anything the model already knows. It takes numbers, bookmark names, relationship ids, list instances and levels, style ids and placeholder texts from the model and writes them as Word structures. It never computes a figure number, resolves a label or chooses a list's restart behaviour.
 
-This is enforced: the backend may import only `tejtex.ir.nodes` and `tejtex.errors` from TejTeX (`tests/test_backend.py::test_backend_imports_only_the_model`).
+This is enforced: the backend may import only `tejtex.ir.nodes`, `tejtex.errors` and its own modules from TejTeX (`tests/test_backend.py::test_backend_imports_only_the_model`).
 
 ## Contract
 
@@ -17,7 +17,7 @@ backend.write(doc, out)           # render, then write the file
 
 - Every model node type is routed (`writer.BLOCKS`, `writer.INLINES`; `ListItem`, `Row`, `Cell`, `BibEntry`, `Meta` and `Document` are handled by their parents). A test fails if a node type is added to the model without a route. A node of an unknown type is an internal error (exit code 1).
 - A node type with a native handler is written as Word structures. A node type without one goes through the **text fallback**, so no content is lost while the stages below are built:
-  - a container whose own structure is not native yet (`List`, `Table`, `Figure`, `Theorem`, `Quote`, `Container`) writes its child blocks through the normal routing, so their paragraphs and runs are native; only the container's own structure (numbering, table grid, …) is still missing;
+  - a container whose own structure is not native yet (`Table`, `Figure`, `Theorem`, `Quote`, `Container`) writes its child blocks through the normal routing, so their paragraphs and runs are native; only the container's own structure (table grid, …) is still missing;
   - a block without children (`Bibliography`, `CodeBlock`, `Rule`) is written as plain `Normal` paragraphs with its text;
   - an inline node without a handler (`Math`, `Citation`, `CrossReference`, `Hyperlink`, `Image`, `Footnote`) is written as a plain run with its text, resolved number or `[image: path]`; footnote texts follow at the end of the document.
 - Every package is checked before it is written (below). A package that fails is an internal error, and no file is written.
@@ -68,6 +68,28 @@ The model decides which styles a document uses (`StyleRegistry`); the backend ma
 
 Word's own style names are used for built-in styles, so Word treats them as its built-in styles.
 
+## Lists and numbering (Stage 4.3)
+
+The model gives every list its numbering instance (abstract definition, level, start value) and every custom `\item[...]` label its own instance. The backend writes them to `word/numbering.xml` and puts `w:numPr` on the paragraphs (`backend/numbering.py`).
+
+- **Ids.** The template's definitions stay (abstract 0–8 and instances 1–9, used by Word's `List Bullet` and `List Number` styles). The model's abstract definitions are added after them (`w:abstractNumId` 9, 10, …) and its instances after the template's (`w:numId` 10, 11, …), so ids never clash.
+- **Levels.** Each abstract definition is `hybridMultilevel` with nine levels, each with the model's format and text (`decimal` `%1.`, `lowerLetter` `(%2)`, `bullet` `•`, …), a left indent of 0.5 in per level and a 0.25 in hanging indent, like Word's own lists.
+- **Restarts.** Every instance has `w:lvlOverride`/`w:startOverride` for its level with the model's start value. Lists that share an abstract definition therefore restart independently, the way LaTeX starts every `enumerate` at 1, or at the value set with `\setcounter{enumi}`.
+- **Items.** The first paragraph of an item gets `w:numPr` (`w:numId`, and `w:ilvl` = the list's level). The number is not text in the paragraph, so pressing Enter at the end of an item in Word gives the next number, and Tab and Shift+Tab change the level.
+  - Further paragraphs of the item are indented to the item's text (`w:ind w:left`) without a number.
+  - A nested list uses its own instance at its own level.
+  - An item that starts with a nested list, and an empty item, get an empty numbered paragraph, so the number is not lost.
+- **Custom labels.** `\item[(x)]` uses the label's instance, which has format `none` and the label as level text. The label does not step the counter, so the next ordinary item continues the count, as in LaTeX.
+- **Description lists.** The term is bold at the start of the item's first paragraph, which has a 0.5 in hanging indent; further paragraphs are indented by 0.5 in. Nested lists inside use the next level.
+
+`tests/data/lists` covers nesting to four levels, mixed `itemize`/`enumerate`, custom labels, restarts, `\setcounter`, enumerate-package and enumitem formats, multi-paragraph and empty items, description lists and item references. `tests/test_lists.py` replays Word's numbering rules on the generated `numbering.xml` and checks that every label matches what LaTeX prints.
+
+Limitations:
+
+- One paragraph holds one number, so an item that starts with a nested list shows its number on its own line; LaTeX puts both on one line.
+- Math in a custom label is shown as its TeX source (`\star`) until Phase 5.
+- enumitem `resume` is reported and not applied; the list restarts.
+
 ## Validation (`backend/check.py`)
 
 `check(data)` returns a list of problems; empty means the package passed.
@@ -88,7 +110,7 @@ Opening the output in Microsoft Word and LibreOffice is the final check (Stage 4
 |---|---|---|---|
 | 4.1 | Package foundation, contract, validation, determinism | — (text fallback for all) | Done |
 | 4.2 | Styles and paragraphs | `Paragraph`, `Heading`, `TextRun`, `Break`, `Placeholder`, metadata | Done |
-| 4.3 | Numbering and lists | `List` (`numbering.xml`, `w:numPr`) | Planned |
+| 4.3 | Numbering and lists | `List`, `ListItem` (`numbering.xml`, `w:numPr`), custom item labels, description lists | Done |
 | 4.4 | Tables and images | `Table`, `Figure`, `Image` (`word/media`, DrawingML) | Planned |
 | 4.5 | Bookmarks and hyperlinks | `Anchor`, `CrossReference`, `Hyperlink`, bookmarks on headings, figures, tables, equations, theorems, bibliography entries | Planned |
 | 4.6 | Integration and compatibility | `Bibliography`, `CodeBlock`, `Rule`, `Theorem`, `Quote`, `Container`, `Math`, `Citation`, `Footnote`; Word and LibreOffice open checks | Planned |

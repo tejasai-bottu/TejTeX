@@ -1,0 +1,77 @@
+\documentclass{article}
+\usepackage[shortlabels]{enumitem}
+\begin{document}
+\section{Lists}
+\begin{enumerate}
+\item First step.
+\item Second step. \label{it:second}
+  \begin{enumerate}
+  \item Inner one.
+  \item Inner two. \label{it:inner}
+    \begin{enumerate}
+    \item Deep one. \label{it:deep}
+      \begin{enumerate}
+      \item Deepest one. \label{it:deepest}
+      \end{enumerate}
+    \end{enumerate}
+  \end{enumerate}
+\item[(x)] Custom label.
+\item Third step.
+
+  A second paragraph in the third step.
+\item
+  \begin{itemize}
+  \item Item that starts with a list.
+  \end{itemize}
+\item
+\end{enumerate}
+
+\begin{itemize}
+\item Bullet one.
+  \begin{itemize}
+  \item Bullet two.
+    \begin{itemize}
+    \item Bullet three.
+      \begin{itemize}
+      \item Bullet four.
+      \end{itemize}
+    \end{itemize}
+  \end{itemize}
+\item Bullet with numbers.
+  \begin{enumerate}
+  \item Numbered inside bullets. \label{it:mixed}
+  \end{enumerate}
+  Text between lists.
+  \begin{enumerate}
+  \item Restarted inside bullets.
+  \end{enumerate}
+\item[--] Dash label.
+\end{itemize}
+
+\begin{enumerate}[(a)]
+\item Lettered. \label{it:lettered}
+\end{enumerate}
+
+\begin{enumerate}
+\setcounter{enumi}{4}
+\item Starts at five.
+\end{enumerate}
+
+\begin{enumerate}[label=\Alph*., start=3]
+\item Starts at C.
+\end{enumerate}
+
+\begin{enumerate}[resume]
+\item Resumed in LaTeX.
+\end{enumerate}
+
+\begin{description}
+\item[Term] Definition text.
+  \begin{itemize}
+  \item Nested in a definition.
+  \end{itemize}
+\item[Other] Second definition.
+\end{description}
+
+See items \ref{it:second}, \ref{it:inner}, \ref{it:deep}, \ref{it:deepest}, \ref{it:mixed} and \ref{it:lettered}.
+\end{document}
