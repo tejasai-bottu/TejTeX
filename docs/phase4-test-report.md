@@ -10,7 +10,7 @@ Date: 22 November 2026. Scope: Stages 4.1–4.6.
 |---|---|---|
 | 1 | Stages 4.5 and 4.6 pass their own tests | Done (`test_bookmarks.py`, `test_hyperlinks.py`, `test_check.py`, `test_full.py`) |
 | 2 | The integration corpus passes | Done (`tests/data/full`, 8 tests, plus validity, no-content-lost and LibreOffice checks) |
-| 3 | All four CI jobs pass | Done (run 45093046008, commit `5fdc6b6`) |
+| 3 | All four CI jobs pass | Done (run 45098462969, commit `bef2821`; earlier run 45093046008 for `5fdc6b6`) |
 | 4 | Microsoft Word checks recorded | Done: automated checks plus Kiran's hands-on checklist (all 7 items) |
 | 5 | LibreOffice validation passes | Done: 11 of 11 corpus documents |
 | 6 | Known limitations documented | Done: [limitations.md](limitations.md) |
@@ -44,16 +44,18 @@ Exit codes 0–6 are unchanged; `test_cli.py` and `test_integration.py` cover ea
 
 GitHub Actions, four jobs: Ubuntu and Windows × Python 3.10 and 3.12, with `TEJTEX_NO_SKIP=1` (no skips allowed). Each job also builds the wheel, installs it into a clean virtual environment and compares its output with the development install's.
 
-Run [45093046008](https://github.com/tejasai-bottu/TejTeX/actions/runs/45093046008) for commit `5fdc6b6`:
+Run [45098462969](https://github.com/tejasai-bottu/TejTeX/actions/runs/45098462969) for commit `bef2821`, the final Phase 4 code:
 
 | Job | Smoke test | Tests | Clean install from the wheel | Time |
 |---|---|---|---|---|
-| ubuntu-latest / Python 3.10 | passed | passed | passed | 41 s |
-| ubuntu-latest / Python 3.12 | passed | passed | passed | 38 s |
-| windows-latest / Python 3.10 | passed | passed | passed | 120 s |
-| windows-latest / Python 3.12 | passed | passed | passed | 69 s |
+| ubuntu-latest / Python 3.10 | passed | passed | passed | 50 s |
+| ubuntu-latest / Python 3.12 | passed | passed | passed | 43 s |
+| windows-latest / Python 3.10 | passed | passed | passed | 97 s |
+| windows-latest / Python 3.12 | passed | passed | passed | 60 s |
 
-With `TEJTEX_NO_SKIP=1` a skip counts as a failure, so all 213 tests ran and passed in every job.
+The earlier run [45093046008](https://github.com/tejasai-bottu/TejTeX/actions/runs/45093046008) for `5fdc6b6` (Stages 4.5–4.6, before the Compatibility Mode fix) also passed in all four jobs.
+
+With `TEJTEX_NO_SKIP=1` a skip counts as a failure, so all 214 tests ran and passed in every job.
 
 ## Clean installation and determinism
 
