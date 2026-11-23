@@ -15,7 +15,7 @@ from tejtex.errors import Exit
 from tejtex.ir.nodes import Citation, CrossReference, Image, Math, Placeholder, TextRun, walk
 
 DATA = Path(__file__).parent / "data"
-CORPUS = ["sec63", "unknown", "includes", "images", "refs", "format", "lists", "tables", "media"]
+CORPUS = ["sec63", "unknown", "includes", "images", "refs", "format", "lists", "tables", "media", "links", "full"]
 
 
 def render(name):

@@ -77,7 +77,7 @@ def test_inline_types_without_native_handler_keep_their_text():
         Footnote("1", [Paragraph("FootnoteText", [TextRun("note")])]), Image("f.png"),
     ]))
     assert [t for t, _ in paras(data)[0][1]] == ["2.1", "[1]", "x^2", "[1]", "[image: f.png]"]
-    assert paras(data)[-1][1][0][0] == "[1] note"
+    assert "".join(t for t, _ in paras(data)[-1][1]) == "[1] note"
 
 
 def test_title_block():

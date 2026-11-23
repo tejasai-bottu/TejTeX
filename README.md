@@ -2,7 +2,25 @@
 
 TejTeX compiles LaTeX source into native, structurally editable Microsoft Word (DOCX) documents. It maps the semantic structure of the source (headings, paragraphs, lists, tables, figures, captions, references and styles) onto Word's own document structures and leaves layout and pagination to Word.
 
-**Status: Phase 4, Stage 4.4 (native tables and images).** The frontend resolves included files, runs Pandoc safely, classifies every LaTeX construct and reports what it cannot convert. The document model numbers sections, figures, tables, equations, theorems and list items, resolves every `\ref` and citation, and assigns Word styles, list numbering, bookmarks and relationships — see [docs/ir.md](docs/ir.md). The backend writes a clean, validated, byte-for-byte reproducible DOCX package; node types are converted to native Word structures stage by stage, and until then they are written as plain paragraphs with their numbers and resolved references — see [docs/backend.md](docs/backend.md).
+**Status: Phase 4 (Core DOCX backend, Milestone 1): implementation and automated checks complete; the hands-on Microsoft Word checks are listed in [docs/phase4-test-report.md](docs/phase4-test-report.md).**
+
+What a compiled document contains:
+
+- **Headings.** Word's built-in heading styles, so the Navigation Pane works.
+- **Paragraphs and formatting.** Native paragraphs and character formatting (bold, italic with LaTeX's nested `\emph`, underline, strike-through, small caps, superscript, subscript, code).
+- **Lists.** Native Word numbering: nesting, restarts, LaTeX's label formats and custom `\item[…]` labels. Enter continues a list, and Tab and Shift+Tab change the level.
+- **Tables.** Editable Word tables with merged cells, repeating header rows, alignment, widths and captions.
+- **Images.** Embedded images, each file stored once, sized as in the source.
+- **References.** Bookmarks for every `\label`. `\ref`, `\eqref`, `\autoref`, `\cref`, `\hyperref` and `\cite` are clickable internal links, and `\href`/`\url` are external links (http, https, ftp and mailto only).
+- **Unsupported content.** TikZ, vector images and unknown commands become visible placeholders, and each one is reported with its file, line and column.
+
+Mathematics (as TeX text), footnotes (at the end) and numbers (static text) are partly supported until Phase 5. [docs/limitations.md](docs/limitations.md) lists what is supported, partial and unsupported.
+
+How it works:
+
+- **Frontend.** It resolves included files, runs Pandoc safely and classifies every LaTeX construct.
+- **Document model.** It numbers and resolves everything ([docs/ir.md](docs/ir.md)).
+- **Backend.** It writes a clean, validated, byte-for-byte reproducible DOCX package ([docs/backend.md](docs/backend.md)).
 
 ## Requirements
 
@@ -52,7 +70,7 @@ Every construct Pandoc skips is reported with its file, line and column and one 
 
 | Category | Meaning | Example |
 |---|---|---|
-| supported | converted | `\section`, lists, `tabular`, `\footnote`, `\cite` |
+| supported | converted | `\section`, lists, `tabular`, `\includegraphics`, `\ref`, `\href`, `\cite` |
 | partial | converted with some information lost | enumitem `resume` or a label TejTeX cannot map, unknown environments, `thebibliography` |
 | unsupported | not converted; layout commands are ignored, content is replaced by a visible placeholder | `\vspace`, `\centering`, unknown commands, `geometry` |
 | render | needs rendering as an image (later phase); a visible placeholder for now | TikZ, PDF/EPS/SVG images |
@@ -81,7 +99,9 @@ No output file is written when the exit code is not 0.
 pytest
 ```
 
-Tests that need the real Pandoc 3.9 are skipped when it is not on PATH. All other tests use a fake Pandoc. Set `TEJTEX_NO_SKIP=1` to turn every skip into a failure. CI (GitHub Actions, Linux and Windows, Python 3.10 and 3.12) installs Pandoc 3.9 and runs everything with `TEJTEX_NO_SKIP=1`.
+Tests that need the real Pandoc 3.9 are skipped when it is not on PATH. All other tests use a fake Pandoc. Set `TEJTEX_NO_SKIP=1` to turn every skip into a failure. CI (GitHub Actions, Linux and Windows, Python 3.10 and 3.12) installs Pandoc 3.9, runs everything with `TEJTEX_NO_SKIP=1` and tests a clean install of the built wheel.
+
+[docs/testing.md](docs/testing.md) covers the test layout, the corpus and the LibreOffice and Word checks. Changes are in [CHANGELOG.md](CHANGELOG.md).
 
 | Module | Role |
 |---|---|
@@ -92,11 +112,9 @@ Tests that need the real Pandoc 3.9 are skipped when it is not on PATH. All othe
 | `caps.py` | Capability registry: support category for each skipped construct |
 | `normalize.py` | Placeholders, image checks, equation labels, Pandoc clean-ups; element classification |
 | `tree.py` | Pandoc AST traversal and validation |
-| `backend/` | DOCX writer: `package.py` (clean package, reproducible ZIP), `writer.py` (routes every model node), `styles.py` (creates the styles the document uses), `numbering.py` (writes the list definitions to `numbering.xml`), `tables.py` (table grid, spans, widths), `media.py` (image parts and sizes), `check.py` (OOXML integrity checks run on every output) |
+| `backend/` | DOCX writer: `package.py` (clean package, reproducible ZIP), `writer.py` (routes every model node), `styles.py` (creates the styles the document uses), `numbering.py` (writes the list definitions to `numbering.xml`), `tables.py` (table grid, spans, widths), `media.py` (image parts and sizes), `check.py` (package, relationship, style, numbering, bookmark, link and table checks run on every output) |
 | `ir/` | Document model: `nodes.py` (content tree), `context.py` (styles, numbering, relationships, references, source map), `build.py` (two passes); no python-docx or lxml |
 | `diag.py` | Diagnostics and the report |
-| `ir.py` | Semantic IR; must not import python-docx or lxml |
-| `backend.py` | DOCX writer |
 | `config.py` | Settings |
 | `errors.py` | Exit codes and the error type |
 

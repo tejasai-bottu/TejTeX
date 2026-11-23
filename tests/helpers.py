@@ -7,7 +7,7 @@ from lxml import etree
 
 from tejtex.diag import Report
 from tejtex.ir.context import DocumentContext
-from tejtex.ir.nodes import Document, Image, List, ListItem, Meta, Placeholder, TextRun, walk
+from tejtex.ir.nodes import Bibliography, Document, Hyperlink, Image, List, ListItem, Meta, Placeholder, TextRun, walk
 
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
@@ -24,6 +24,10 @@ def make(blocks, meta=None):
             use("VerbatimChar")
         if isinstance(n, Placeholder):
             use("PlaceholderChar" if n.inline else "Placeholder")
+        if isinstance(n, Bibliography):
+            use("Bibliography")
+        if isinstance(n, Hyperlink):
+            use("Hyperlink")
         if isinstance(n, Image) and not n.rel:
             use("PlaceholderChar")
         if isinstance(n, List):
@@ -139,3 +143,47 @@ def png(w, h, dpi=None):
         out += chunk(b"pHYs", struct.pack(">IIB", ppm, ppm, 1))
     raw = b"".join(b"\x00" + b"\xff\xff\xff" * w for _ in range(h))
     return out + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b"")
+
+
+def marks(data):
+    out = {}
+    names = {}
+    live = {}
+    for e in part(data).iter():
+        if e.tag == W + "bookmarkStart":
+            names[e.get(W + "id")] = e.get(W + "name")
+            live[e.get(W + "id")] = ""
+        elif e.tag == W + "bookmarkEnd":
+            i = e.get(W + "id")
+            out[names[i]] = live.pop(i)
+        elif e.tag == W + "t" or (e.tag == W + "tab" and e.getparent().tag == W + "r"):
+            for i in live:
+                live[i] += e.text or "" if e.tag == W + "t" else "\t"
+    return out
+
+
+def words(p):
+    out = ""
+    for e in p.iter(W + "t", W + "tab"):
+        if e.tag == W + "t":
+            out += e.text or ""
+        elif e.getparent().tag == W + "r":
+            out += "\t"
+    return out
+
+
+def home(data, name):
+    for p in part(data).iter(W + "p"):
+        for e in p.iter(W + "bookmarkStart"):
+            if e.get(W + "name") == name:
+                st = p.find(f"{W}pPr/{W}pStyle")
+                return st.get(W + "val") if st is not None else None, words(p)
+    return None
+
+
+def links(data):
+    out = []
+    for h in part(data).iter(W + "hyperlink"):
+        rid = h.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id")
+        out.append((h.get(W + "anchor") or rid, "".join(t.text or "" for t in h.iter(W + "t"))))
+    return out

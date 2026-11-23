@@ -57,3 +57,14 @@ jobs:
 
       - name: Tests
         run: python -m pytest -v -rs
+
+      - name: Clean install from the wheel
+        run: |
+          python -m pip wheel . -w dist --no-deps
+          python -m venv clean
+          if [ "$RUNNER_OS" = "Windows" ]; then py=clean/Scripts/python; else py=clean/bin/python; fi
+          $py -m pip install dist/*.whl
+          $py -m tejtex --version
+          $py -m tejtex compile tests/data/full/main.tex -o clean.docx -q
+          python -m tejtex compile tests/data/full/main.tex -o dev.docx -q
+          cmp clean.docx dev.docx

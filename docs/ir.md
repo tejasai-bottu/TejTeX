@@ -23,7 +23,7 @@ doc = ir.build(ast, report, source, config)   # Document(meta, blocks, ctx)
 | `LineBreak` | `Break` |
 | `Math` | `Math(tex, display, numbers)` — `\label`, `\nonumber`, `\notag`, `\tag` are removed from `tex`; `numbers` is one `(text, bookmark, label)` per numbered row |
 | `Link` with `reference-type` | `CrossReference(label, kind, text, bookmark, src)` |
-| other `Link` | `Hyperlink(inlines, url, rel, bookmark)` |
+| other `Link` | `Hyperlink(inlines, url, rel, bookmark)` — `#label` targets get the label's bookmark; external targets get a relationship only when they are `http`, `https`, `ftp` or `mailto` URLs without spaces or quotes, otherwise the text stays without a link and a `partial` warning names the target |
 | `Cite` | `Citation(keys, text, bookmarks, mode, src)` |
 | `Image` | `Image(path, rel, media, width, height, alt, src)` — `rel` is set only for a file Word can show (PNG, JPEG, GIF, BMP, TIFF, recognised by content); other formats get a `render` diagnostic; Pandoc's default alt text `image` becomes empty |
 | `Note` | `Footnote(number, blocks)` |
@@ -51,7 +51,7 @@ Bookmark names follow Word's rules: they start with a letter, use only `A–Z a�
 ## Two passes (`ir/build.py`)
 
 1. **Registration** walks the AST once in document order and assigns, before anything is built: section numbers, figure, table and equation numbers, theorem numbers, footnote numbers, list numbering instances, relationship ids for images and links, bibliography entry numbers, and a target for every label. A reference that appears before its target therefore resolves.
-2. **Instantiation** builds the content tree and asks the context for numbers, bookmarks and relationship ids. An undefined `\ref`, `\eqref`, `\cref` or `\hyperref` becomes `??` with a warning at its source location; a citation key missing from `thebibliography` becomes `?` with a warning.
+2. **Instantiation** builds the content tree and asks the context for numbers, bookmarks and relationship ids. An undefined `\ref`, `\cref` or `\hyperref` becomes `??` (`\eqref` becomes `(??)`, as in LaTeX) with a warning at its source location; a citation key missing from `thebibliography` becomes `?` with a warning.
 
 Numbering rules follow LaTeX:
 

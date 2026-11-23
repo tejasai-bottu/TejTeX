@@ -16,6 +16,7 @@ LABEL = re.compile(r"\\label\s*\{([^}]*)\}")
 TAG = re.compile(r"\\tag\*?\s*\{([^}]*)\}")
 NONUM = re.compile(r"\\(?:nonumber|notag)(?![A-Za-z])")
 THM = re.compile(r"(.+?)\s+(\d[\w.]*)$")
+SAFE = re.compile(r"(?:https?|ftp)://[^\s\"<>\\^`{|}]+|mailto:[^\s\"<>\\^`{|}]+", re.I)
 ENUMITEM = re.compile(r"\\usepackage\s*(?:\[[^\]]*\])?\s*\{[^}]*\benumitem\b")
 NUMBERED = {"equation", "align", "gather", "multline", "flalign", "alignat", "eqnarray"}
 ROWS = {"align", "gather", "flalign", "alignat", "eqnarray"}
@@ -352,7 +353,12 @@ class Builder:
         url = target[0]
         if "reference-type" in dict(a[2]) or not url or url.startswith("#"):
             return
-        self.info[id(n)] = self.ctx.rels.link(url)
+        if SAFE.fullmatch(url):
+            self.info[id(n)] = self.ctx.rels.link(url)
+        else:
+            el = "\\href{%s}" % url
+            msg = "link target not allowed (only http, https, ftp and mailto); the text is kept without a link"
+            self.ctx.diags.add("warning", "partial", el, msg, self.ctx.source.find(url))
 
     def list1(self, n, d, path):
         t, c = n["t"], n["c"]
@@ -630,7 +636,7 @@ class Builder:
         if tg is None:
             el = "\\%s{%s}" % (CMDS.get(kind, "ref"), label)
             self.ctx.diags.add("warning", "", el, "reference to an undefined label", src)
-            return CrossReference(label, kind, "??", None, src)
+            return CrossReference(label, kind, "(??)" if kind == "eqref" else "??", None, src)
         num = tg.number
         if num and kind == "eqref":
             text = f"({num})"

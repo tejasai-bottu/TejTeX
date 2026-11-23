@@ -16,10 +16,10 @@ backend.write(doc, out)           # render, then write the file
 ```
 
 - Every model node type is routed (`writer.BLOCKS`, `writer.INLINES`; `ListItem`, `Row`, `Cell`, `BibEntry`, `Meta` and `Document` are handled by their parents). A test fails if a node type is added to the model without a route. A node of an unknown type is an internal error (exit code 1).
-- A node type with a native handler is written as Word structures. A node type without one goes through the **text fallback**, so no content is lost while the stages below are built:
-  - a container whose own structure is not native yet (`Theorem`, `Quote`, `Container`) writes its child blocks through the normal routing, so their paragraphs and runs are native;
-  - a block without children (`Bibliography`, `CodeBlock`, `Rule`) is written as plain `Normal` paragraphs with its text;
-  - an inline node without a handler (`Math`, `Citation`, `CrossReference`, `Hyperlink`, `Footnote`) is written as a plain run with its text or resolved number; footnote texts follow at the end of the document.
+- A node type with a native handler is written as Word structures. Two node types still go through the **text fallback**, so no content is lost:
+  - `Rule` (a horizontal rule) has no text and writes nothing;
+  - the footnote marker (`Footnote` inline) is written as `[1]`. The footnote's own text follows at the end of the document as `[1] text` paragraphs in the `footnote text` style, and labels inside it become bookmarks there. Native Word footnotes (`footnotes.xml`) are Phase 5.
+- Mathematics stays TeX source text until Phase 5 (OMML). Display equations carry their numbers, so references to them work (below).
 - Every package is checked before it is written (below). A package that fails is an internal error, and no file is written.
 
 ## Package
@@ -125,19 +125,65 @@ Limitations:
 - Vector images need the renderer (a later phase).
 - A file with a valid header but broken content is shown as a placeholder without a diagnostic.
 
+## Bookmarks and hyperlinks (Stage 4.5)
+
+The model gives every label a Word bookmark name and resolves every reference; the backend places the bookmarks and wraps references in `w:hyperlink`.
+
+**Bookmarks** — `w:bookmarkStart`/`w:bookmarkEnd` with the model's name and a running id:
+
+| Label on | Bookmark spans |
+|---|---|
+| `\section`…`\subsubsection`, `\chapter` | the heading's number and text (`2.1⇥Results`) |
+| figure, table with a caption | the caption's label, number and text (`Figure 2: A plot`) |
+| figure, table without a caption | an empty bookmark at the start of the figure's first paragraph, or of the table's first cell |
+| equation (each numbered row) | the number `(2)` written after the equation |
+| theorem-like environment | the head (`Theorem 1`) |
+| `\bibitem` | the entry label `[1]` |
+| `\label` in a list item, footnote or paragraph | an empty bookmark at the label's position |
+| other labelled environment | an empty bookmark at the start of its first paragraph |
+
+Names follow Word's rules (a letter first, then letters, digits and `_`, at most 40 characters) and are unique ignoring case. The model makes them so: `fig:a` → `fig_a`, a second label that normalises to the same name → `fig_a_2`, `1abc` → `L1abc`, long labels are cut to 40 characters with a numeric suffix when needed. A label defined twice keeps its first place and gets a warning. The original LaTeX label stays in the model (`label` fields) and in the source map.
+
+**Internal links** — `w:hyperlink w:anchor="<bookmark>"` around the text the model resolved: `\ref` (`2.1`), `\eqref` (`(2)`), `\autoref`/`\cref` (`Figure 2`), `\hyperref[label]{text}`, and citations (`[1, 2]` links to the first entry). Forward and backward references work the same way because the model resolves them before anything is written. An undefined reference is written as `??` (`(??)` for `\eqref`) without a link; the model has already warned with the source location. Internal links have no character style, so they look like the surrounding text, as in a printed LaTeX document.
+
+**External links** — `\href{url}{text}` and `\url{url}` become `w:hyperlink r:id="rTej<n>"` with the model's relationship id, a `TargetMode="External"` relationship in `word/_rels/document.xml.rels`, and the `Hyperlink` character style on their runs (runs with their own character style, such as code, keep it). The model allows only `http`, `https`, `ftp` and `mailto` targets without spaces or quotes. Anything else (`javascript:`, `file:`, `data:`, relative paths) keeps its text without a link and gets a `partial` warning with the source location.
+
+Links are never nested: a reference inside the text of another link is written as text.
+
+## Theorems, bibliography, code and footnotes (Stage 4.6)
+
+- **Theorems.** `Theorem 1 (Title).` starts the first paragraph of the body, with the name, number and final full stop in bold, as LaTeX's default theorem style prints it. The body's italics come from the model.
+- **Bibliography.** One paragraph per entry in the `Bibliography` style (hanging indent): `[1] Author. Title. Year.`
+- **Code blocks.** One paragraph in the `Source Code` style; line breaks are kept.
+- **Footnotes.** At the end of the document, see the contract above.
+
 ## Validation (`backend/check.py`)
 
-`check(data)` returns a list of problems; empty means the package passed.
+`check(data)` returns a list of problems; empty means the package passed. It runs on every output before it is written.
 
-- The file is a ZIP without duplicate entries, and every `.xml` and `.rels` part is well-formed (parsed without entity expansion or network access).
-- `[Content_Types].xml` declares a content type for every part, and every declared override exists.
-- `_rels/.rels` and every other relationship file: ids are unique, every internal target exists.
-- The main document is WordprocessingML with a body, and every `r:id`, `r:embed` and `r:link` in it has a relationship.
-- Every paragraph, character and table style used is defined in `styles.xml`.
-- Every `w:numId` used is defined in `numbering.xml`, and every numbering instance has its abstract definition.
-- Bookmarks: unique ids, start and end paired, names follow Word's rules (letter or `_` first, letters, digits and `_`, at most 40 characters) and are unique ignoring case; every internal hyperlink (`w:anchor`) targets an existing bookmark.
+- **Package.** The file is a ZIP without duplicate entries, and every `.xml` and `.rels` part is well-formed (parsed without entity expansion or network access). `[Content_Types].xml` declares a content type for every part, including media, and every declared override exists.
+- **Relationships.** In every relationship file, ids are unique and every internal target exists. Every external target is a hyperlink with an allowed scheme, so a `javascript:` or `file:` target is caught.
+- **Document references.**
+  - The main document is WordprocessingML with a body, and every `r:id`, `r:embed` and `r:link` in it has a relationship.
+  - A hyperlink has exactly one target: `w:anchor` or `r:id`. Its `r:id` must be an external hyperlink relationship.
+  - A picture's `r:embed` must be an image part.
+  - Drawing ids (`wp:docPr/@id`) are unique positive numbers.
+- **Styles.** Every paragraph, character and table style used is defined. Style ids are unique, and every base style (`w:basedOn`) exists.
+- **Numbering.** Every `w:numId` used is defined, and every numbering instance has its abstract definition. `numId` and `abstractNumId` values are unique, and levels are 0–8.
+- **Bookmarks.**
+  - Ids are unique, and every start has an end that comes after it.
+  - Names follow Word's rules (a letter first) and are unique ignoring case.
+  - Every internal hyperlink (`w:anchor`) targets an existing bookmark.
+- **Tables.**
+  - Every table has a grid, and every row covers exactly the grid's columns (`w:gridSpan` counted).
+  - A vertical merge continues only below a merged cell.
+  - Every cell ends with a paragraph.
 
-Opening the output in Microsoft Word and LibreOffice is the final check (Stage 4.6). Stage 4.1 output converts with `soffice --headless --convert-to pdf`.
+`tests/test_check.py` builds a deliberately broken package for each of these checks.
+
+## Compatibility (Stage 4.6)
+
+Microsoft Word and LibreOffice were checked on the integration corpus and the stage samples. Results and differences are in [phase4-test-report.md](phase4-test-report.md); known gaps are in [limitations.md](limitations.md).
 
 ## Stages
 
@@ -147,5 +193,5 @@ Opening the output in Microsoft Word and LibreOffice is the final check (Stage 4
 | 4.2 | Styles and paragraphs | `Paragraph`, `Heading`, `TextRun`, `Break`, `Placeholder`, metadata | Done |
 | 4.3 | Numbering and lists | `List`, `ListItem` (`numbering.xml`, `w:numPr`), custom item labels, description lists | Done |
 | 4.4 | Tables and images | `Table`, `Row`, `Cell` (`w:tbl`, spans, header rows, widths), `Figure`, `Image` (`word/media`, DrawingML inline), captions | Done |
-| 4.5 | Bookmarks and hyperlinks | `Anchor`, `CrossReference`, `Hyperlink`, bookmarks on headings, figures, tables, equations, theorems, bibliography entries | Planned |
-| 4.6 | Integration and compatibility | `Bibliography`, `CodeBlock`, `Rule`, `Theorem`, `Quote`, `Container`, `Math`, `Citation`, `Footnote`; Word and LibreOffice open checks | Planned |
+| 4.5 | Bookmarks and hyperlinks | `Anchor`, `CrossReference`, `Citation`, `Hyperlink`, bookmarks on headings, captions, equations, theorems, bibliography entries, containers; checker extensions | Done |
+| 4.6 | Integration and compatibility | `Theorem`, `Bibliography`, `CodeBlock`, `Quote`, `Container`, equation numbers, footnote texts; integration corpus; Word and LibreOffice checks | Done; the hands-on Word checks are listed in the test report |
