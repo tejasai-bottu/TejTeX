@@ -38,7 +38,7 @@ Date: 22 November 2026. Scope: Stages 5.1–5.6.
 | Environment | Result |
 |---|---|
 | Linux (Python 3.10.12, Pandoc 3.9, `TEJTEX_NO_SKIP=1`) | 236 passed |
-| Windows 11 laptop (Python 3.14.0, Pandoc 3.9) | WINDOWS_RESULT |
+| Windows 11 laptop (Python 3.14.0, Pandoc 3.9) | 235 passed, 1 skipped (symbolic links need administrator rights on this machine; the test runs in CI) |
 
 Existing tests changed where the representation changed: heading numbers are no longer text (tests read them through `labels`/`shown`, which replay Word's numbering, now including style-linked lists); bookmarks wrap numbers; references to numbered targets are fields, not hyperlinks; the bibliography has its heading.
 
@@ -101,7 +101,7 @@ Word's sources (`b:Sources` in a Custom XML part, `CITATION` and `BIBLIOGRAPHY` 
 
 ## CI
 
-CI_RESULT
+To be recorded after the push.
 
 ## Known unresolved issues
 

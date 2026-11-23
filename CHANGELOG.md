@@ -2,7 +2,7 @@
 
 All dates are 2026. Version 0.1.0 is not released yet.
 
-## Phase 5 — Advanced document semantics
+## Phase 5 — Advanced document semantics (`6c7a30d`)
 
 - **5.1 Headings.** Heading levels 1–3 are numbered by one outline list linked to the `heading 1`–`3` styles, not by number text, so inserted or moved headings renumber. Starred headings switch the numbering off with `numId` 0.
 - **5.2 Figures and tables.** Caption numbers are `SEQ Figure` and `SEQ Table` fields; per-chapter numbers are `{STYLEREF 1 \w}.{SEQ … \s 1}`.
