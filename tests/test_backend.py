@@ -55,6 +55,14 @@ def test_package_is_clean():
     assert "<Application>TejTeX</Application>" in z.read("docProps/app.xml").decode()
 
 
+def test_settings_have_no_template_leftovers():
+    data = backend.render(make([Paragraph("BodyText", [TextRun("x")])]))
+    x = zipfile.ZipFile(io.BytesIO(data)).read("word/settings.xml").decode()
+    assert 'w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"' in x
+    for tag in ("w:proofState", "w:rsids", "w:rsidRoot", "w14:docId", "w15:docId"):
+        assert "<" + tag not in x
+
+
 def test_meta_and_footnotes_are_not_dropped():
     meta = Meta(title=[TextRun("T")], authors=[[TextRun("A")]], date=[TextRun("2026")], abstract=[Paragraph("Abstract", [TextRun("Abs.")])])
     d = make([Paragraph("BodyText", [TextRun("x"), Footnote("1", [Paragraph("FootnoteText", [TextRun("Note.")])]), Image("f.png")])], meta)

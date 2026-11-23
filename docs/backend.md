@@ -33,6 +33,7 @@ The backend starts from python-docx's default template and removes what does not
 | `word/stylesWithEffects.xml` | Word 2010 compatibility copy of the styles, 430 KB |
 | `docProps/app.xml` | claimed "Microsoft Macintosh Word"; now `Application: TejTeX` |
 | `docProps/core.xml` | creator "python-docx", a 2013 timestamp; now title and authors from the document, no timestamps |
+| `word/settings.xml` | Word 2010 compatibility, so Word showed "Compatibility Mode"; a claim that spelling was already checked; the template's revision ids and document ids. Now `compatibilityMode` 15 and none of the rest |
 
 The ZIP is rewritten with a fixed timestamp (1980-01-01) and a stable entry order, so the same input gives a byte-identical file.
 
@@ -194,4 +195,4 @@ Microsoft Word and LibreOffice were checked on the integration corpus and the st
 | 4.3 | Numbering and lists | `List`, `ListItem` (`numbering.xml`, `w:numPr`), custom item labels, description lists | Done |
 | 4.4 | Tables and images | `Table`, `Row`, `Cell` (`w:tbl`, spans, header rows, widths), `Figure`, `Image` (`word/media`, DrawingML inline), captions | Done |
 | 4.5 | Bookmarks and hyperlinks | `Anchor`, `CrossReference`, `Citation`, `Hyperlink`, bookmarks on headings, captions, equations, theorems, bibliography entries, containers; checker extensions | Done |
-| 4.6 | Integration and compatibility | `Theorem`, `Bibliography`, `CodeBlock`, `Quote`, `Container`, equation numbers, footnote texts; integration corpus; Word and LibreOffice checks | Done; the hands-on Word checks are listed in the test report |
+| 4.6 | Integration and compatibility | `Theorem`, `Bibliography`, `CodeBlock`, `Quote`, `Container`, equation numbers, footnote texts; integration corpus; Word and LibreOffice checks | Done |

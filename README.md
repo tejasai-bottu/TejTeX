@@ -2,7 +2,7 @@
 
 TejTeX compiles LaTeX source into native, structurally editable Microsoft Word (DOCX) documents. It maps the semantic structure of the source (headings, paragraphs, lists, tables, figures, captions, references and styles) onto Word's own document structures and leaves layout and pagination to Word.
 
-**Status: Phase 4 (Core DOCX backend, Milestone 1): implementation and automated checks complete; the hands-on Microsoft Word checks are listed in [docs/phase4-test-report.md](docs/phase4-test-report.md).**
+**Status: Phase 4 (Core DOCX backend, Milestone 1) is complete.** It was checked in Microsoft Word and LibreOffice; see [docs/phase4-test-report.md](docs/phase4-test-report.md).
 
 What a compiled document contains:
 

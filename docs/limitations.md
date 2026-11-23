@@ -65,7 +65,8 @@ The same documents were checked in Microsoft Word 16.0.20625 (Office16, Windows 
 - **Link addresses.** Word shows an external link's address in its normalised form (`https://www.ctan.org/` for `https://www.ctan.org`). The link target is the same.
 - **List formats.** LibreOffice converts Word's list definitions into its own list styles. The numbers it shows are the same as Word's.
 - **Adjacent tables.** Both programs merge two tables that touch into one table. TejTeX always puts a paragraph between them.
-- **Automated Word checks.** These cover structure and behaviour (numbering, Enter and Tab, merges, header rows, pictures, bookmarks, link targets). How the page looks, and opening an external link in a browser, are checked by hand; see the test report.
+- **Automated Word checks.** These cover structure and behaviour: numbering, Enter and Tab, merges, header rows, pictures, bookmarks and link targets. Kiran checked the rest in Word by hand: no repair prompt, the Navigation Pane, Ctrl+click on an external link, the Bookmark dialog, header rows on later pages, dragging a picture, and editing and saving. Results are in the test report.
+- **Damaged files.** Word refuses a file with malformed XML but opens some structurally broken files without any message. TejTeX's checker catches those cases before a file is written.
 
 ## Known unresolved issues
 

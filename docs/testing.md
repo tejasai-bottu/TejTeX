@@ -57,22 +57,25 @@ tejtex compile tests/data/full/main.tex -o full.docx
 python scripts/libreoffice_check.py full.docx
 ```
 
-**Microsoft Word (Windows).** `scripts/word_check.ps1` opens DOCX files read-only in a new, hidden Word instance through COM and writes a JSON report. If Word attaches to an instance that was already running, the script stops without touching it. The report covers:
+**Microsoft Word (Windows).** `scripts/word_check.ps1` opens a temporary copy of each DOCX file read-only in a new, hidden Word instance through COM (so a file you have open in Word is not touched) and writes a JSON report. If Word attaches to an instance that was already running, the script stops without touching it. The report covers:
 
+- the window caption, so a file opened in Compatibility Mode or as repaired shows up, and the page count;
 - headings by outline level (what the Navigation Pane shows);
 - the numbers Word renders for each list paragraph, and pressing Enter after "Third step.", then Tab and Shift+Tab;
 - tables, merged cells, header rows and the pages a table spans;
 - picture sizes, and resizing and moving the first picture;
-- captions, bookmarks, and every internal link followed to its bookmark;
+- captions, and adding text to the first caption;
+- bookmarks, and going to each one;
+- every internal link followed to its bookmark;
 - external link addresses, and restyling a heading.
 
-The script changes nothing on disk.
+The script changes nothing on disk. Word refuses a file with malformed XML, but it opens some structurally broken files without any message, so the checker is still needed (see the negative controls in the test report).
 
 ```
 powershell -ExecutionPolicy Bypass -File scripts\word_check.ps1 -Out word-check.json full.docx
 ```
 
-Clicking an external link and looking at the pages are still checked by hand.
+Checked by hand: the repair prompt, the Navigation Pane, Ctrl+click on an external link, the Insert ▸ Bookmark dialog, header rows on later pages, dragging a picture and saving after a caption edit. The checklist is in [phase4-test-report.md](phase4-test-report.md).
 
 ## Continuous integration
 

@@ -2,6 +2,8 @@
 
 Date: 22 November 2026. Scope: Stages 4.1–4.6.
 
+**Result: Phase 4 is complete.** All seven criteria are met, including the hands-on checks in Microsoft Word.
+
 ## Completion criteria
 
 | # | Criterion | Status |
@@ -9,18 +11,18 @@ Date: 22 November 2026. Scope: Stages 4.1–4.6.
 | 1 | Stages 4.5 and 4.6 pass their own tests | Done (`test_bookmarks.py`, `test_hyperlinks.py`, `test_check.py`, `test_full.py`) |
 | 2 | The integration corpus passes | Done (`tests/data/full`, 8 tests, plus validity, no-content-lost and LibreOffice checks) |
 | 3 | All four CI jobs pass | Done (run 45093046008, commit `5fdc6b6`) |
-| 4 | Microsoft Word checks recorded | Automated checks recorded below; the hands-on checks are listed at the end |
+| 4 | Microsoft Word checks recorded | Done: automated checks plus Kiran's hands-on checklist (all 7 items) |
 | 5 | LibreOffice validation passes | Done: 11 of 11 corpus documents |
 | 6 | Known limitations documented | Done: [limitations.md](limitations.md) |
 | 7 | Final test report | This document |
 
 ## Test suite
 
-213 tests:
+214 tests:
 
 | File | Tests | File | Tests |
 |---|---|---|---|
-| test_backend | 8 | test_lists | 11 |
+| test_backend | 9 | test_lists | 11 |
 | test_bookmarks | 7 | test_media | 7 |
 | test_caps | 6 | test_model | 5 |
 | test_check | 12 | test_normalize | 4 |
@@ -33,8 +35,8 @@ Date: 22 November 2026. Scope: Stages 4.1–4.6.
 
 | Environment | Result |
 |---|---|
-| Linux (Python 3.10.12, Pandoc 3.9, `TEJTEX_NO_SKIP=1`) | 213 passed |
-| Windows 11 laptop (Python 3.14.0, Pandoc 3.9) | 212 passed, 1 skipped: symbolic links need administrator rights on this machine. The test runs in CI. |
+| Linux (Python 3.10.12, Pandoc 3.9, `TEJTEX_NO_SKIP=1`) | 214 passed |
+| Windows 11 laptop (Python 3.14.0, Pandoc 3.9) | 211 passed, 3 skipped. Symbolic links need administrator rights on this machine, and Smart App Control blocked the reinstalled, unsigned `tejtex.exe` in two console-script tests. All three run in CI. |
 
 Exit codes 0–6 are unchanged; `test_cli.py` and `test_integration.py` cover each of them.
 
@@ -91,7 +93,7 @@ In the PDF of the integration corpus, the 60-row table spans pages, and its head
 
 ## Microsoft Word 16.0.20625 (Windows 11)
 
-`scripts/word_check.ps1` opened six documents read-only in a separate, hidden Word instance:
+`scripts/word_check.ps1` opened a temporary copy of each of six documents, read-only, in a separate hidden Word instance:
 
 - `phase4-full-sample.docx` (integration corpus)
 - `stage-4.5-links-sample.docx`
@@ -100,11 +102,15 @@ In the PDF of the integration corpus, the 60-row table spans pages, and its head
 - `stage-4.4-images-sample.docx`
 - `stage-4.2-sample.docx`
 
-The script changed nothing on disk. Results:
+The script changed nothing on disk.
+
+**Compatibility Mode fix.** The first runs showed that Word opened every generated file in Compatibility Mode. python-docx's template sets Word 2010 compatibility (`compatibilityMode` 14) and claims spelling was already checked. The backend now sets `compatibilityMode` 15 and removes the template's spelling state, revision ids and document ids (`test_backend.py::test_settings_have_no_template_leftovers`). The results below are from the run after the fix: no document opens in Compatibility Mode, and the integration document still lays out as 4 pages, with no layout delay.
+
+Results:
 
 | Check | Result |
 |---|---|
-| Documents open | 6 of 6 opened with alerts off and no error; no document protection |
+| Documents open | 6 of 6 opened with alerts off and no error. None opened in Compatibility Mode or as repaired, and none is protected |
 | Navigation Pane headings | Every heading has its outline level. Integration corpus: seven level-1 headings, `1 Introduction` … `7 Results`. Links sample: levels 1 and 2 as in the source |
 | List numbers Word renders | Same as LaTeX: `1.`, `2.`, `(a)`, `•`, `i.`, `(x)`, `3.`, `(a)` (integration), and all 24 items of the lists corpus, including `5.`, `C.` and the restarts at `1.` |
 | Enter continues a list | Enter after "Third step." gives `4.` (integration and lists corpus) |
@@ -112,28 +118,38 @@ The script changed nothing on disk. Results:
 | Numbering restarts | `(a) Restarted list…`, `1. Restarted inside bullets`, `5. Starts at five`, `C. Starts at C` |
 | Tables editable | All tables are Word tables with Word's row and column counts |
 | Merged cells | The merged table reports 4 rows × 3 columns with 10 cells and is not uniform, as expected for one horizontal and one vertical merge |
-| Header rows repeat | The 60-row table spans pages 1–3 and its first row is a heading row (`HeadingFormat = True`) |
+| Header rows repeat | The 60-row table spans pages 2–3 and its first row is a heading row (`HeadingFormat = True`). A PDF exported by Word itself (before the fix, when the table spanned pages 1–3) shows the header row at the top of each of those pages |
 | Images | All pictures are present at the sizes from the source (216×108 pt for `0.5\textwidth`, 28.3 pt for `1cm`, 432 pt for `\linewidth`, natural 180×90 pt) |
 | Images resize and move | The first picture resized with its aspect ratio locked, and moved after conversion to a floating shape |
-| Captions | Caption paragraphs: `Table 1: Scores with merged cells`, `Figure 1: A chart`, `Figure 2: A vector diagram`, and the stage samples' captions |
-| Bookmarks | Word's bookmark list (the same collection as Insert ▸ Bookmark) has every bookmark: 16 in the integration corpus, 11 in the links sample with the normalised names, 7 in the lists corpus |
+| Captions | Caption paragraphs: `Table 1: Scores with merged cells`, `Figure 1: A chart`, `Figure 2: A vector diagram`, and the stage samples' captions. Text added to a caption stays in the caption, and its bookmark is kept |
+| Bookmarks | Word's bookmark list (the same collection as Insert ▸ Bookmark) has every bookmark: 16 in the integration corpus, 11 in the links sample with the normalised names, 7 in the lists corpus. Going to each bookmark selects its start: 16/16, 11/11, 7/7, 3/3, 3/3, 5/5 |
 | Internal links | Every internal link was followed and landed on its bookmark: 16 of 16 (integration), 16 of 16 (links), 6 of 6 (lists), 2 of 2 (tables and images) |
-| External links | Word reads the targets: `https://example.org/tejtex`, `https://www.ctan.org/`, `https://example.org/list`, `https://example.com/a?b=1&c=2`, `mailto:info@example.com` |
+| External links | Not followed by the script. Word reads the targets: `https://example.org/tejtex`, `https://www.ctan.org/` (integration, 2 links, so 18 links in all), `https://example.org/list`, `https://example.com/a?b=1&c=2`, `mailto:info@example.com` (links sample) |
 | Heading style change | Changing a heading to `heading 2` moves it to outline level 2 |
+
+### Negative controls
+
+To show what "opened without error" proves, three broken copies of the integration document were put through the same script and through `check()`:
+
+| Broken copy | Microsoft Word | `check()` |
+|---|---|---|
+| Malformed XML (one `</w:p>` removed) | Refuses to open it ("Word experienced an error trying to open the file") | not well-formed XML |
+| Picture pointing to a missing relationship | Opens it without a message | `r:embed=rTej99 has no relationship` |
+| Table row with two extra cells | Opens it without a message | `row 1 has 5 columns, the grid has 3` |
+
+Word reports only fatal damage and quietly tolerates smaller structural errors, so an automated open alone does not prove a file is clean. TejTeX's checker catches all three, and it runs on every output.
 
 ### Hands-on checks (Kiran, in Word)
 
-These need a person at the screen and are not yet recorded:
+Done by Kiran on 22 November 2026 with `phase4-full-sample.docx`. That copy was built before the Compatibility Mode fix, which changes only `word/settings.xml`.
 
-- [ ] `phase4-full-sample.docx` opens visibly without a repair prompt.
-- [ ] Navigation Pane shows the seven headings; clicking one jumps to it.
-- [ ] Ctrl+click on `CTAN` opens https://www.ctan.org in the browser; Ctrl+click on `Figure 1` jumps to the figure caption.
-- [ ] Insert ▸ Bookmark lists the bookmarks, and Go To works.
-- [ ] The long table's header row is visible at the top of pages 2 and 3.
-- [ ] A picture can be selected, resized and dragged.
-- [ ] Caption text can be edited.
-
-Phase 4 is complete once these are ticked.
+- [x] The document opens without a repair warning.
+- [x] The Navigation Pane displays the headings and lets me navigate.
+- [x] Ctrl+click on CTAN opens https://www.ctan.org/.
+- [x] Insert → Bookmark displays the generated bookmarks.
+- [x] The long table repeats its header row on pages 2 and 3.
+- [x] I can drag and resize a picture.
+- [x] I can edit a figure caption and save the document.
 
 ## Known unresolved issues
 

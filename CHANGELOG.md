@@ -11,6 +11,8 @@ All dates are 2026. Version 0.1.0 is not released yet.
 - The checker also validates hyperlink targets and schemes, picture relationships, drawing ids, style and numbering identifiers, bookmark order and table structure. Each check has a deliberately broken package in `tests/test_check.py`.
 - `scripts/libreoffice_check.py` and `scripts/word_check.ps1` for the compatibility checks; the CI installs the built wheel into a clean environment.
 - Docs: `docs/limitations.md`, `docs/testing.md`, `docs/phase4-test-report.md`.
+- Word no longer opens generated files in Compatibility Mode. `settings.xml` now uses `compatibilityMode` 15, and the template's spelling state, revision ids and document ids are removed.
+- Microsoft Word checks: automated through COM, plus Kiran's hands-on checklist. Phase 4 is complete.
 
 ### Stage 4.5 — Bookmarks and hyperlinks
 

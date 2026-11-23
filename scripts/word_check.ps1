@@ -18,13 +18,18 @@ try {
     $word.DisplayAlerts = 0
     $word.AutomationSecurity = 3
     foreach ($f in $Files) {
-        $path = (Resolve-Path $f).Path
-        $r = [ordered]@{ file = (Split-Path $path -Leaf) }
+        $src = (Resolve-Path $f).Path
+        $r = [ordered]@{ file = (Split-Path $src -Leaf) }
+        $path = Join-Path $env:TEMP ("tejtex-word-check-" + $r.file)
         $doc = $null
         try {
+            Copy-Item -LiteralPath $src -Destination $path -Force
             $doc = $word.Documents.Open($path, $false, $true, $false)
             $r.opened = $true
+            $r.window = $doc.ActiveWindow.Caption
+            $r.repaired = $doc.ActiveWindow.Caption -like "*Repaired*"
             $r.protection = $doc.ProtectionType
+            $r.pages = $doc.ComputeStatistics(2)
             $r.paragraphs = $doc.Paragraphs.Count
             $r.headings = @(foreach ($p in $doc.Paragraphs) { if ($p.OutlineLevel -lt 10) { "$($p.OutlineLevel) $("$($p.Range.Text)".Trim())" } })
             $r.lists = @(foreach ($p in $doc.Paragraphs) {
@@ -62,6 +67,24 @@ try {
                 $r.moved = [math]::Abs($sh.Left - 100) -lt 1
             }
             $r.bookmarks = @(foreach ($b in $doc.Bookmarks) { "$($b.Name) = $("$($b.Range.Text)".Trim())" })
+            $r.bookmark_goto = @(foreach ($b in $doc.Bookmarks) {
+                $b.Select()
+                "$($b.Name) $($word.Selection.Start -eq $b.Range.Start)"
+            })
+            $k = -35
+            $cap = $doc.Styles.Item([ref]$k).NameLocal
+            foreach ($p in $doc.Paragraphs) {
+                if ($p.Style.NameLocal -eq $cap) {
+                    $n = $doc.Bookmarks.Count
+                    $rng = $p.Range
+                    $end = $rng.End - 1
+                    $rng.SetRange($end, $end)
+                    $rng.InsertAfter(" (edited)")
+                    $r.caption_edited = "$($p.Range.Text)".Trim()
+                    $r.caption_bookmarks_kept = $doc.Bookmarks.Count -eq $n
+                    break
+                }
+            }
             $r.links = @(foreach ($h in $doc.Hyperlinks) {
                 if ($h.SubAddress) {
                     $name = $h.SubAddress
@@ -107,6 +130,7 @@ try {
                 $no = 0
                 $doc.Close([ref]$no)
             }
+            Remove-Item -LiteralPath $path -ErrorAction SilentlyContinue
         }
         $report += $r
     }

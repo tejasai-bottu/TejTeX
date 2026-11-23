@@ -12,6 +12,12 @@ APP = (
     b"<Application>TejTeX</Application></Properties>"
 )
 TERMS = "{http://purl.org/dc/terms/}"
+W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+LEFTOVERS = [
+    W + "proofState", W + "rsids",
+    "{http://schemas.microsoft.com/office/word/2010/wordml}docId",
+    "{http://schemas.microsoft.com/office/word/2012/wordml}docId",
+]
 STAMP = (1980, 1, 1, 0, 0, 0)
 BAD = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff\ufffe\uffff]")
 
@@ -42,6 +48,13 @@ def new(title="", authors=""):
         x = el.find(TERMS + tag)
         if x is not None:
             el.remove(x)
+    st = d.settings.element
+    for tag in LEFTOVERS:
+        for x in st.findall(tag):
+            st.remove(x)
+    for x in st.iter(W + "compatSetting"):
+        if x.get(W + "name") == "compatibilityMode":
+            x.set(W + "val", "15")
     return d
 
 
